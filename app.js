@@ -72,9 +72,17 @@ const undoButton = document.querySelector("#undo-game");
 const resetButton = document.querySelector("#reset-session");
 const sessionMode = document.querySelector("#session-mode");
 const setupOverlay = document.querySelector("#session-setup");
+const rulesMode = document.querySelector("#rules-mode");
+const waitingRules = document.querySelector("#waiting-rules");
 
 function activeTeamIds() {
   return teamIdsFor(state.teamCount);
+}
+
+// Three-team sessions award more for waiting because only one team sits each game.
+function waitingPointsForStreak(waitStreak, teamCount = state.teamCount) {
+  const firstWaitPoints = teamCount === 3 ? 20 : 10;
+  return firstWaitPoints + (waitStreak - 1) * 5;
 }
 
 function saveState() {
@@ -131,8 +139,7 @@ function finishGame() {
       team.points += Math.min(state.scores[teamId] || 0, 5);
     } else {
       team.waitStreak += 1;
-      // Waiting awards 15, 20, 25... for consecutive sit-outs.
-      team.points += 15 + (team.waitStreak - 1) * 5;
+      team.points += waitingPointsForStreak(team.waitStreak);
     }
   });
 
@@ -205,6 +212,14 @@ function renderStandings() {
   sessionMode.textContent = `${state.teamCount}-team session`;
 }
 
+function renderRules() {
+  const firstWaitPoints = waitingPointsForStreak(1);
+  rulesMode.textContent = `${state.teamCount} teams`;
+  waitingRules.textContent =
+    `1st +${firstWaitPoints}, 2nd +${firstWaitPoints + 5}, ` +
+    `3rd +${firstWaitPoints + 10}, then +5 each.`;
+}
+
 function renderHistory() {
   historyList.innerHTML = state.history.map((game) =>
     `<li>${game.teamA} ${game.scoreA} – ${game.scoreB} ${game.teamB}</li>`
@@ -217,6 +232,7 @@ function render() {
   renderScoreboard();
   renderStandings();
   renderHistory();
+  renderRules();
 }
 
 scoreboard.addEventListener("click", (event) => {

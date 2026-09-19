@@ -27,6 +27,12 @@
       <p id="next-game" class="next-game">NEXT GAME: A vs B</p>
     </section>
 
+    <section class="rules-card" aria-labelledby="rules-heading">
+      <h2 id="rules-heading">Scoring Rules</h2>
+      <p><strong>On court:</strong> 1 per point, capped at 5; winner +2.</p>
+      <p><strong>Waiting (<span id="rules-mode">4 teams</span>):</strong> <span id="waiting-rules">1st +10, 2nd +15, 3rd +20, then +5 each.</span></p>
+    </section>
+
     <section class="panel" aria-labelledby="standings-heading">
       <div class="section-heading">
         <h2 id="standings-heading">Session Standings</h2>
@@ -70,10 +76,12 @@
         <button type="button" data-team-count="3">
           <strong>3 Teams</strong>
           <span>A, B, C</span>
+          <small>Waiting: +20, +25, +30, then +5</small>
         </button>
         <button type="button" data-team-count="4">
           <strong>4 Teams</strong>
           <span>A, B, C, D</span>
+          <small>Waiting: +10, +15, +20, then +5</small>
         </button>
       </div>
     </div>

@@ -143,6 +143,18 @@ h1 { margin: .25rem 0 0; font-size: 1.15rem; }
 
 .next-game { margin: .35rem 0 0; font-size: clamp(1.5rem, 7vw, 2.25rem); font-weight: 900; }
 
+.rules-card {
+  margin: 1rem 0;
+  padding: .9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+
+.rules-card h2 { margin: 0 0 .55rem; font-size: 1rem; }
+.rules-card p { margin: .35rem 0; color: var(--muted); font-size: .88rem; line-height: 1.4; }
+.rules-card strong { color: var(--text); }
+
 .panel {
   margin-top: 1rem;
   padding: 1rem;
@@ -210,6 +222,7 @@ td:nth-child(2) { color: var(--green); font-size: 1.15rem; font-weight: 900; }
 
 .team-count-options strong { font-size: 1.2rem; }
 .team-count-options span { color: var(--muted); font-weight: 700; }
+.team-count-options small { color: var(--accent); font-weight: 800; }
 
 button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 
