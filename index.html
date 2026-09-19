@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101820">
+  <title>Basketball Rotation</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <p class="eyebrow">Basketball rotation</p>
+      <p id="session-mode" class="session-mode">4-team session</p>
+      <h1>Current Game</h1>
+      <p id="current-matchup" class="matchup" aria-live="polite">A <span>vs</span> B</p>
+      <p class="target-note">Game target: 7 points</p>
+    </header>
+
+    <section id="scoreboard" class="scoreboard" aria-label="Score controls"></section>
+
+    <button id="finish-game" class="finish-button" type="button">Finish Game</button>
+    <p id="game-message" class="message" role="status" aria-live="polite"></p>
+
+    <section class="next-card" aria-labelledby="next-heading">
+      <p id="next-heading" class="eyebrow">Up next</p>
+      <p id="next-game" class="next-game">NEXT GAME: A vs B</p>
+    </section>
+
+    <section class="panel" aria-labelledby="standings-heading">
+      <div class="section-heading">
+        <h2 id="standings-heading">Session Standings</h2>
+        <span id="game-count">0 games</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th>Points</th>
+              <th>Played</th>
+              <th>Waited</th>
+            </tr>
+          </thead>
+          <tbody id="standings-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="history-heading">
+      <div class="section-heading">
+        <h2 id="history-heading">Game History</h2>
+      </div>
+      <ol id="history-list" class="history-list"></ol>
+      <p id="empty-history" class="empty-state">No completed games yet.</p>
+    </section>
+
+    <section class="session-actions" aria-label="Session actions">
+      <button id="undo-game" class="secondary-button" type="button">Undo Last Game</button>
+      <button id="reset-session" class="danger-button" type="button">New Session / Reset</button>
+    </section>
+  </main>
+
+  <section id="session-setup" class="setup-overlay" role="dialog" aria-modal="true" aria-labelledby="setup-title" hidden>
+    <div class="setup-card">
+      <p class="eyebrow">Basketball rotation</p>
+      <h2 id="setup-title">Start a new session</h2>
+      <p>How many teams are playing today?</p>
+      <div class="team-count-options">
+        <button type="button" data-team-count="3">
+          <strong>3 Teams</strong>
+          <span>A, B, C</span>
+        </button>
+        <button type="button" data-team-count="4">
+          <strong>4 Teams</strong>
+          <span>A, B, C, D</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
