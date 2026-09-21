@@ -273,6 +273,12 @@ textarea { min-height: 12rem; padding: .75rem; resize: vertical; }
 input:disabled { opacity: .45; }
 
 .roster-list { display: grid; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.roster-groups { display: grid; gap: 1rem; }
+.roster-group-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.roster-group-heading h3 { margin: 0 0 .55rem; font-size: .95rem; }
+.roster-group-heading span { color: var(--muted); font-size: .78rem; font-weight: 800; }
+.inactive-player-section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.roster-empty { padding: .8rem; border: 1px dashed var(--line); border-radius: .7rem; color: var(--muted); text-align: center; }
 .roster-player {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -297,6 +303,9 @@ input:disabled { opacity: .45; }
   font-weight: 800;
 }
 .small-button.remove { color: var(--danger); }
+.small-button.deactivate { min-height: 2.85rem; border-color: #697986; color: #d5dde3; }
+.small-button.reactivate { min-height: 2.85rem; border-color: var(--green); color: var(--green); }
+.small-button.delete-permanently { color: var(--danger); }
 .small-button:disabled { opacity: .35; }
 
 .table-wrap { overflow-x: auto; }

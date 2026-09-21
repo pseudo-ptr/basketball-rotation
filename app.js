@@ -7,7 +7,7 @@ const TEAM_LABELS = ["A", "B"];
 const MAX_UNDO_SNAPSHOTS = 10;
 const FREQUENT_PLAYERS = [
   "邓子浩", "老鲁", "Dave", "Neil", "老肖", "Albert", "韩洋",
-  "一达", "常哲", "王哥", "廖凡", "昊天", "赵"
+  "一达", "常哲", "王哥", "王琦", "廖凡", "昊天", "赵"
 ];
 
 function freshState(players = []) {
@@ -88,7 +88,10 @@ const elements = {
   newPlayerPoints: document.querySelector("#new-player-points"),
   medianHint: document.querySelector("#median-hint"),
   rosterLockNote: document.querySelector("#roster-lock-note"),
-  rosterList: document.querySelector("#roster-list"),
+  activePlayerList: document.querySelector("#active-player-list"),
+  inactivePlayerList: document.querySelector("#inactive-player-list"),
+  activePlayerCount: document.querySelector("#active-player-count"),
+  inactivePlayerCount: document.querySelector("#inactive-player-count"),
   rosterCount: document.querySelector("#roster-count"),
   standingsBody: document.querySelector("#standings-body"),
   gameCount: document.querySelector("#game-count"),
@@ -299,7 +302,8 @@ function finishGame() {
 
     if (participantIds.has(player.id)) {
       const team = state.assignments.A.includes(player.id) ? "A" : "B";
-      player.points += Math.min(state.scores[team], 6) + (team === winner ? 1 : 0);
+      // Every participant earns exactly their team's final basketball score.
+      player.points += state.scores[team];
       player.gamesPlayed += 1;
       player.waitStreak = 0;
     } else {
@@ -331,8 +335,42 @@ function undoLastGame() {
   if (state.phase === "playing" || state.undoStack.length === 0) return;
   const remainingSnapshots = state.undoStack.slice(0, -1);
   const restored = JSON.parse(state.undoStack[state.undoStack.length - 1]);
-  state = { ...freshState(), ...restored, undoStack: remainingSnapshots };
-  showMessage("Last game undone. Its teams and score are restored for editing.");
+
+  // Undo game scoring/history, but preserve roster changes made after that game.
+  // This prevents Undo from resurrecting a deleted player or changing Active status.
+  const restoredPlayers = new Map(restored.players.map((player) => [player.id, player]));
+  const currentRoster = state.players.map((currentPlayer) => {
+    const restoredPlayer = restoredPlayers.get(currentPlayer.id);
+    if (!restoredPlayer) return currentPlayer;
+    return {
+      ...restoredPlayer,
+      name: currentPlayer.name,
+      active: currentPlayer.active,
+      rosterOrder: currentPlayer.rosterOrder
+    };
+  });
+
+  state = {
+    ...freshState(),
+    ...restored,
+    players: currentRoster,
+    nextPlayerNumber: Math.max(state.nextPlayerNumber, restored.nextPlayerNumber || 1),
+    undoStack: remainingSnapshots
+  };
+
+  const activeIds = new Set(state.players.filter((player) => player.active).map((player) => player.id));
+  const restoredParticipants = [...state.assignments.A, ...state.assignments.B];
+  const restoredGameIsValid = restoredParticipants.length === PLAYERS_PER_GAME &&
+    restoredParticipants.every((playerId) => activeIds.has(playerId));
+
+  if (state.phase === "playing" && !restoredGameIsValid) {
+    state.phase = "assigning";
+    state.scores = { A: 0, B: 0 };
+    refreshSelection(false);
+    showMessage("Last game undone. Current Active/Inactive roster choices were preserved; assign the recalculated next 10.");
+  } else {
+    showMessage("Last game undone. Its teams and score are restored for editing.");
+  }
   saveState();
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -512,6 +550,8 @@ function manageRosterPlayer(playerId, action) {
   }
   const player = getPlayer(playerId);
   if (!player) return;
+  const wasSelected = state.selectedPlayerIds.includes(playerId) ||
+    state.assignments.A.includes(playerId) || state.assignments.B.includes(playerId);
 
   if (action === "edit") {
     const updatedName = window.prompt("Edit player name or code:", player.name)?.trim();
@@ -520,19 +560,25 @@ function manageRosterPlayer(playerId, action) {
     showMessage(`Player renamed to ${updatedName}. Existing game history keeps its saved name.`);
   }
 
-  if (action === "toggle") {
-    player.active = !player.active;
-    if (!player.active) player.waitStreak = 0;
-    showMessage(`${player.name} is now ${player.active ? "active" : "inactive"}.`);
+  if (action === "deactivate" && player.active) {
+    player.active = false;
+    showMessage(
+      wasSelected
+        ? `${player.name} deactivated. The next 10 and team assignments were recalculated.`
+        : `${player.name} moved to Inactive Players. Their score and statistics were preserved.`
+    );
   }
 
-  if (action === "remove") {
-    const confirmed = window.confirm(
-      `Remove ${player.name} from the roster? Completed game history will be preserved.`
-    );
+  if (action === "reactivate" && !player.active) {
+    player.active = true;
+    showMessage(`${player.name} reactivated with their existing score and statistics.`);
+  }
+
+  if (action === "delete" && !player.active) {
+    const confirmed = window.confirm("Are you sure you want to permanently delete this player?");
     if (!confirmed) return;
     state.players = state.players.filter((candidate) => candidate.id !== playerId);
-    showMessage(`${player.name} removed. Completed game history was preserved.`);
+    showMessage(`${player.name} permanently deleted. Completed game history was preserved.`);
   }
 
   refreshSelection(true);
@@ -637,21 +683,42 @@ function renderRoster() {
   const controls = elements.addPlayerForm.querySelectorAll("input, button");
   controls.forEach((control) => { control.disabled = state.phase === "playing"; });
 
-  elements.rosterList.innerHTML = [...state.players]
-    .sort((a, b) => a.rosterOrder - b.rosterOrder)
-    .map((player) => `
-      <li class="roster-player ${player.active ? "" : "inactive"}">
-        <span class="roster-name">
-          ${escapeHtml(player.name)}
-          <span class="player-metrics">${formatPoints(player.points)} pts · ${player.active ? "Active" : "Inactive"}</span>
-        </span>
-        <span class="roster-actions">
-          <button class="small-button" type="button" data-roster-action="edit" data-player-id="${player.id}" ${state.phase === "playing" ? "disabled" : ""}>Edit</button>
-          <button class="small-button" type="button" data-roster-action="toggle" data-player-id="${player.id}" ${state.phase === "playing" ? "disabled" : ""}>${player.active ? "Inactive" : "Activate"}</button>
-          <button class="small-button remove" type="button" data-roster-action="remove" data-player-id="${player.id}" ${state.phase === "playing" ? "disabled" : ""}>Remove</button>
-        </span>
-      </li>`).join("");
+  const sortedPlayers = [...state.players].sort((a, b) => a.rosterOrder - b.rosterOrder);
+  const activePlayers = sortedPlayers.filter((player) => player.active);
+  const inactivePlayers = sortedPlayers.filter((player) => !player.active);
+  const disabled = state.phase === "playing" ? "disabled" : "";
 
+  elements.activePlayerList.innerHTML = activePlayers.length
+    ? activePlayers.map((player) => `
+        <li class="roster-player">
+          <span class="roster-name">
+            ${escapeHtml(player.name)}
+            <span class="player-metrics">${formatPoints(player.points)} pts · ${player.gamesPlayed} played · ${player.waitStreak} waited</span>
+          </span>
+          <span class="roster-actions">
+            <button class="small-button" type="button" data-roster-action="edit" data-player-id="${player.id}" ${disabled}>Edit</button>
+            <button class="small-button deactivate" type="button" data-roster-action="deactivate" data-player-id="${player.id}" ${disabled}>Deactivate</button>
+          </span>
+        </li>`).join("")
+    : '<li class="roster-empty">No active players.</li>';
+
+  elements.inactivePlayerList.innerHTML = inactivePlayers.length
+    ? inactivePlayers.map((player) => `
+        <li class="roster-player inactive">
+          <span class="roster-name">
+            ${escapeHtml(player.name)}
+            <span class="player-metrics">${formatPoints(player.points)} pts · ${player.gamesPlayed} played · ${player.waitStreak} waited</span>
+          </span>
+          <span class="roster-actions">
+            <button class="small-button" type="button" data-roster-action="edit" data-player-id="${player.id}" ${disabled}>Edit</button>
+            <button class="small-button reactivate" type="button" data-roster-action="reactivate" data-player-id="${player.id}" ${disabled}>Reactivate</button>
+            <button class="small-button delete-permanently" type="button" data-roster-action="delete" data-player-id="${player.id}" ${disabled}>Delete Permanently</button>
+          </span>
+        </li>`).join("")
+    : '<li class="roster-empty">No inactive players.</li>';
+
+  elements.activePlayerCount.textContent = activePlayers.length;
+  elements.inactivePlayerCount.textContent = inactivePlayers.length;
   elements.sessionSummary.textContent = `${activeCount} active · ${state.players.length} total`;
 }
 
@@ -713,10 +780,12 @@ elements.scoreboard.addEventListener("click", (event) => {
 elements.finishGame.addEventListener("click", finishGame);
 elements.undoGame.addEventListener("click", undoLastGame);
 elements.addPlayerForm.addEventListener("submit", addPlayer);
-elements.rosterList.addEventListener("click", (event) => {
+function handleRosterAction(event) {
   const button = event.target.closest("[data-roster-action]");
   if (button) manageRosterPlayer(button.dataset.playerId, button.dataset.rosterAction);
-});
+}
+elements.activePlayerList.addEventListener("click", handleRosterAction);
+elements.inactivePlayerList.addEventListener("click", handleRosterAction);
 
 elements.createRoster.addEventListener("click", createInitialRoster);
 elements.generateDefaultRoster.addEventListener("click", () => generateDefaultRoster());
