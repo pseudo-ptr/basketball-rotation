@@ -11,41 +11,100 @@
   <main class="app-shell">
     <header class="app-header">
       <p class="eyebrow">Basketball rotation</p>
-      <p id="session-mode" class="session-mode">4-team session</p>
-      <h1>Current Game</h1>
-      <p id="current-matchup" class="matchup" aria-live="polite">A <span>vs</span> B</p>
-      <p class="target-note">Game target: 7 points</p>
+      <p id="session-summary" class="session-pill">0 active players</p>
+      <h1 id="page-title">Next 10 Players</h1>
+      <p class="target-note">Player rankings choose who plays. You choose the teams.</p>
     </header>
 
-    <section id="scoreboard" class="scoreboard" aria-label="Score controls"></section>
+    <p id="app-message" class="message" role="status" aria-live="polite"></p>
 
-    <button id="finish-game" class="finish-button" type="button">Finish Game</button>
-    <p id="game-message" class="message" role="status" aria-live="polite"></p>
+    <section id="assignment-view" aria-labelledby="next-heading">
+      <div class="next-card">
+        <p class="eyebrow">Up next</p>
+        <h2 id="next-heading">NEXT 10 PLAYERS</h2>
+        <p id="selection-help" class="muted-copy">Add at least 10 active players to select a full game.</p>
+        <ol id="next-player-list" class="next-player-list"></ol>
+      </div>
 
-    <section class="next-card" aria-labelledby="next-heading">
-      <p id="next-heading" class="eyebrow">Up next</p>
-      <p id="next-game" class="next-game">NEXT GAME: A vs B</p>
+      <section class="panel" aria-labelledby="assignment-heading">
+        <div class="section-heading">
+          <h2 id="assignment-heading">Assign Teams</h2>
+          <span id="assignment-count">A: 0/5 · B: 0/5</span>
+        </div>
+        <p class="panel-intro">Use the large A/B buttons above, or review each temporary team below.</p>
+        <div class="team-drafts">
+          <article class="team-draft team-a">
+            <h3>Team A <span id="team-a-count">0/5</span></h3>
+            <ul id="team-a-list"></ul>
+          </article>
+          <article class="team-draft team-b">
+            <h3>Team B <span id="team-b-count">0/5</span></h3>
+            <ul id="team-b-list"></ul>
+          </article>
+        </div>
+        <button id="start-game" class="finish-button" type="button" disabled>Start Game</button>
+      </section>
+    </section>
+
+    <section id="game-view" aria-labelledby="current-game-heading" hidden>
+      <div class="current-game-card">
+        <p class="eyebrow">Current game</p>
+        <h2 id="current-game-heading">TEAM A <span>vs</span> TEAM B</h2>
+        <p class="target-note">Game target: 7 points</p>
+        <div class="current-rosters">
+          <article>
+            <h3>Team A</h3>
+            <ul id="current-team-a"></ul>
+          </article>
+          <article>
+            <h3>Team B</h3>
+            <ul id="current-team-b"></ul>
+          </article>
+        </div>
+      </div>
+
+      <section id="scoreboard" class="scoreboard" aria-label="Score controls"></section>
+      <button id="finish-game" class="finish-button" type="button">Finish Game</button>
     </section>
 
     <section class="rules-card" aria-labelledby="rules-heading">
-      <h2 id="rules-heading">Scoring Rules</h2>
-      <p><strong>On court:</strong> 1 per point, capped at 5; winner +2.</p>
-      <p><strong>Waiting (<span id="rules-mode">4 teams</span>):</strong> <span id="waiting-rules">1st +10, 2nd +15, 3rd +20, then +5 each.</span></p>
+      <h2 id="rules-heading">Player Scoring</h2>
+      <p><strong>Playing:</strong> team score capped at 6; winning players get +1.</p>
+      <p><strong>Waiting:</strong> +15, +20, +25, then another +5 for each consecutive wait.</p>
+      <p>Only active players earn points or qualify for the next 10.</p>
     </section>
+
+    <details class="panel roster-panel">
+      <summary>Manage Roster <span id="roster-count">0 players</span></summary>
+      <p id="roster-lock-note" class="panel-intro"></p>
+      <form id="add-player-form" class="add-player-form">
+        <label>
+          Player name / code
+          <input id="new-player-name" name="playerName" type="text" maxlength="40" autocomplete="off" required>
+        </label>
+        <label>
+          Starting points <span id="median-hint"></span>
+          <input id="new-player-points" name="startingPoints" type="number" min="0" step="0.5" inputmode="decimal" placeholder="Use median">
+        </label>
+        <button class="primary-button" type="submit">Add Player</button>
+      </form>
+      <ul id="roster-list" class="roster-list"></ul>
+    </details>
 
     <section class="panel" aria-labelledby="standings-heading">
       <div class="section-heading">
-        <h2 id="standings-heading">Session Standings</h2>
+        <h2 id="standings-heading">Player Standings</h2>
         <span id="game-count">0 games</span>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Team</th>
+              <th>Player</th>
               <th>Points</th>
               <th>Played</th>
               <th>Waited</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody id="standings-body"></tbody>
@@ -57,32 +116,69 @@
       <div class="section-heading">
         <h2 id="history-heading">Game History</h2>
       </div>
-      <ol id="history-list" class="history-list"></ol>
+      <div id="history-list" class="history-list"></div>
       <p id="empty-history" class="empty-state">No completed games yet.</p>
     </section>
 
     <section class="session-actions" aria-label="Session actions">
       <button id="undo-game" class="secondary-button" type="button">Undo Last Game</button>
-      <button id="reset-session" class="danger-button" type="button">New Session / Reset</button>
+      <button id="new-session" class="danger-button" type="button">New Session / Reset</button>
     </section>
   </main>
 
-  <section id="session-setup" class="setup-overlay" role="dialog" aria-modal="true" aria-labelledby="setup-title" hidden>
+  <section id="roster-setup" class="setup-overlay" role="dialog" aria-modal="true" aria-labelledby="setup-title" hidden>
     <div class="setup-card">
       <p class="eyebrow">Basketball rotation</p>
-      <h2 id="setup-title">Start a new session</h2>
-      <p>How many teams are playing today?</p>
-      <div class="team-count-options">
-        <button type="button" data-team-count="3">
-          <strong>3 Teams</strong>
-          <span>A, B, C</span>
-          <small>Waiting: +20, +25, +30, then +5</small>
-        </button>
-        <button type="button" data-team-count="4">
-          <strong>4 Teams</strong>
-          <span>A, B, C, D</span>
-          <small>Waiting: +10, +15, +20, then +5</small>
-        </button>
+      <h2 id="setup-title">Create Today’s Roster</h2>
+      <p>Select frequent players, add custom names, or fill open spots with numbered players.</p>
+      <div class="quick-roster">
+        <label for="setup-player-count">Number of Players</label>
+        <input id="setup-player-count" type="number" min="10" step="1" inputmode="numeric" value="20">
+        <div class="setup-stats" aria-live="polite">
+          <div><strong id="setup-target-count">20</strong><span>Players</span></div>
+          <div><strong id="setup-selected-count">0</strong><span>Selected</span></div>
+          <div class="remaining-stat"><strong id="setup-remaining-count">20</strong><span>Remaining</span></div>
+        </div>
+      </div>
+
+      <section class="frequent-players" aria-labelledby="frequent-heading">
+        <h3 id="frequent-heading">Frequent Players</h3>
+        <div id="frequent-player-chips" class="frequent-player-chips"></div>
+      </section>
+
+      <section class="setup-roster" aria-labelledby="setup-roster-heading">
+        <h3 id="setup-roster-heading">Player Names</h3>
+        <ol id="setup-roster-list"></ol>
+        <div class="setup-custom-player">
+          <label for="setup-custom-name">Add a custom player</label>
+          <div>
+            <input id="setup-custom-name" type="text" maxlength="40" autocomplete="off" placeholder="Name, nickname, or code">
+            <button id="add-setup-player" class="quick-button" type="button">Add Player</button>
+          </div>
+        </div>
+      </section>
+
+      <button id="fill-remaining-roster" class="primary-button fill-remaining-button" type="button">Fill 20 Remaining Players</button>
+      <div class="setup-divider"><span>default-roster shortcuts</span></div>
+      <div class="setup-shortcuts">
+        <button id="generate-default-roster" class="quick-button" type="button">Generate Default Players</button>
+        <button id="create-20-roster" class="quick-button" type="button">Create 20 Players</button>
+      </div>
+      <p id="setup-message" class="message" role="status"></p>
+      <button id="create-roster" class="finish-button" type="button" disabled>Start Session</button>
+      <button id="cancel-roster-setup" class="secondary-button setup-cancel" type="button" hidden>Cancel</button>
+    </div>
+  </section>
+
+  <section id="new-session-dialog" class="setup-overlay" role="dialog" aria-modal="true" aria-labelledby="new-session-title" hidden>
+    <div class="setup-card">
+      <p class="eyebrow">Reset session</p>
+      <h2 id="new-session-title">Start a New Session</h2>
+      <p>Scores, waits, games, assignments, and history will reset.</p>
+      <div class="session-choice-buttons">
+        <button id="keep-roster" class="primary-button" type="button">Keep Current Roster</button>
+        <button id="replace-roster" class="danger-button" type="button">Start With New Roster</button>
+        <button id="cancel-new-session" class="secondary-button" type="button">Cancel</button>
       </div>
     </div>
   </section>
