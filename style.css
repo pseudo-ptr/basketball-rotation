@@ -83,6 +83,17 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 
 .next-card h2 { margin: .3rem 0; font-size: 1.35rem; }
 .next-card > p { margin-bottom: .8rem; }
+.selection-label {
+  display: inline-block;
+  margin-left: .35rem;
+  padding: .2rem .45rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: .62rem;
+  letter-spacing: .04em;
+  vertical-align: middle;
+}
 
 .next-player-list {
   display: grid;
@@ -110,6 +121,53 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 .next-player-name { display: block; overflow: hidden; font-size: 1rem; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
 .next-player-name::before { content: counter(selected-player) ". "; color: var(--accent); }
 .player-metrics { display: block; margin-top: .2rem; color: var(--muted); font-size: .76rem; font-weight: 700; }
+.next-player.swap-pending { border-color: var(--danger); background: rgb(255 93 93 / 9%); }
+
+.swap-button,
+.swap-in-button {
+  min-height: 3rem;
+  padding: .45rem .7rem;
+  border: 2px solid var(--line);
+  border-radius: .65rem;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: .78rem;
+  font-weight: 900;
+}
+.swap-button.pending { border-color: var(--danger); color: var(--danger); }
+.swap-in-button { border-color: var(--green); color: var(--green); }
+.swap-in-button:disabled { opacity: .38; }
+
+.swap-instruction {
+  min-height: 1.25rem;
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 750;
+  text-align: center;
+}
+.swap-instruction.active { color: #ffd0a6; }
+
+.waiting-players {
+  margin-top: .9rem;
+  padding-top: .9rem;
+  border-top: 1px solid var(--line);
+}
+.waiting-players h3 { margin: 0 0 .6rem; font-size: .95rem; text-align: left; }
+.waiting-players ul { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
+.waiting-player {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .6rem;
+  min-height: 3.7rem;
+  padding: .55rem .65rem;
+  border: 1px solid var(--line);
+  border-radius: .75rem;
+  background: #121d25;
+  text-align: left;
+}
+.waiting-player-name { overflow: hidden; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.selection-actions { display: grid; gap: .65rem; margin-top: .9rem; }
 
 .assign-buttons { display: grid; grid-template-columns: repeat(2, 3rem); gap: .35rem; }
 .assign-button {

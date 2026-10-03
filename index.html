@@ -21,12 +21,21 @@
     <section id="assignment-view" aria-labelledby="next-heading">
       <div class="next-card">
         <p class="eyebrow">Up next</p>
-        <h2 id="next-heading">NEXT 10 PLAYERS</h2>
+        <h2 id="next-heading">NEXT 10 PLAYERS <span id="selection-label" class="selection-label">Recommended</span></h2>
         <p id="selection-help" class="muted-copy">Add at least 10 active players to select a full game.</p>
         <ol id="next-player-list" class="next-player-list"></ol>
+        <p id="swap-instruction" class="swap-instruction">Tap Swap beside a selected player, then choose someone from the waiting list.</p>
+        <section id="waiting-players-section" class="waiting-players" aria-labelledby="waiting-players-heading">
+          <h3 id="waiting-players-heading">Waiting / Bench</h3>
+          <ul id="waiting-player-list"></ul>
+        </section>
+        <div class="selection-actions">
+          <button id="confirm-selection" class="primary-button" type="button" disabled>Confirm Final 10</button>
+          <button id="change-selection" class="secondary-button" type="button" hidden>Change Players</button>
+        </div>
       </div>
 
-      <section class="panel" aria-labelledby="assignment-heading">
+      <section id="team-assignment-panel" class="panel" aria-labelledby="assignment-heading" hidden>
         <div class="section-heading">
           <h2 id="assignment-heading">Assign Teams</h2>
           <span id="assignment-count">A: 0/5 · B: 0/5</span>
@@ -145,13 +154,13 @@
     <div class="setup-card">
       <p class="eyebrow">Basketball rotation</p>
       <h2 id="setup-title">Create Today’s Roster</h2>
-      <p>Select frequent players, add custom names, or fill open spots with numbered players.</p>
+      <p>Select frequent players, add custom names, or fill open spots with numbered players. The target helps with setup; you can add more players anytime.</p>
       <div class="quick-roster">
         <label for="setup-player-count">Number of Players</label>
         <input id="setup-player-count" type="number" min="10" step="1" inputmode="numeric" value="20">
         <div class="setup-stats" aria-live="polite">
-          <div><strong id="setup-target-count">20</strong><span>Players</span></div>
-          <div><strong id="setup-selected-count">0</strong><span>Selected</span></div>
+          <div><strong id="setup-target-count">20</strong><span>Target</span></div>
+          <div><strong id="setup-selected-count">0</strong><span>Current</span></div>
           <div class="remaining-stat"><strong id="setup-remaining-count">20</strong><span>Remaining</span></div>
         </div>
       </div>

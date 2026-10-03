@@ -7,7 +7,8 @@ const TEAM_LABELS = ["A", "B"];
 const MAX_UNDO_SNAPSHOTS = 10;
 const FREQUENT_PLAYERS = [
   "邓子浩", "老鲁", "Dave", "Neil", "老肖", "Albert", "韩洋",
-  "一达", "常哲", "王哥", "王琦", "廖凡", "昊天", "赵"
+  "一达", "常哲", "王哥", "王琦", "廖凡", "昊天", "赵",
+  "Ryan", "老方", "Sam", "Leo", "Shaw", "李老师", "George"
 ];
 
 function freshState(players = []) {
@@ -15,7 +16,10 @@ function freshState(players = []) {
     version: 2,
     nextPlayerNumber: 1,
     players,
+    recommendedPlayerIds: [],
     selectedPlayerIds: [],
+    selectionConfirmed: false,
+    swapOutPlayerId: null,
     assignments: { A: [], B: [] },
     phase: "assigning",
     scores: { A: 0, B: 0 },
@@ -43,7 +47,10 @@ function loadState() {
         active: player.active !== false,
         rosterOrder: Number.isFinite(player.rosterOrder) ? player.rosterOrder : index
       })),
+      recommendedPlayerIds: Array.isArray(saved.recommendedPlayerIds) ? saved.recommendedPlayerIds : [],
       selectedPlayerIds: Array.isArray(saved.selectedPlayerIds) ? saved.selectedPlayerIds : [],
+      selectionConfirmed: saved.selectionConfirmed === true,
+      swapOutPlayerId: typeof saved.swapOutPlayerId === "string" ? saved.swapOutPlayerId : null,
       assignments: {
         A: Array.isArray(saved.assignments?.A) ? saved.assignments.A : [],
         B: Array.isArray(saved.assignments?.B) ? saved.assignments.B : []
@@ -72,6 +79,13 @@ const elements = {
   assignmentView: document.querySelector("#assignment-view"),
   nextPlayerList: document.querySelector("#next-player-list"),
   selectionHelp: document.querySelector("#selection-help"),
+  selectionLabel: document.querySelector("#selection-label"),
+  swapInstruction: document.querySelector("#swap-instruction"),
+  waitingPlayersSection: document.querySelector("#waiting-players-section"),
+  waitingPlayerList: document.querySelector("#waiting-player-list"),
+  confirmSelection: document.querySelector("#confirm-selection"),
+  changeSelection: document.querySelector("#change-selection"),
+  teamAssignmentPanel: document.querySelector("#team-assignment-panel"),
   assignmentCount: document.querySelector("#assignment-count"),
   teamAList: document.querySelector("#team-a-list"),
   teamBList: document.querySelector("#team-b-list"),
@@ -201,11 +215,34 @@ function addPlayerRecord(name, startingPoints) {
   return player;
 }
 
-// Select only active players, using ranking points and every specified tie-break.
-function refreshSelection(preserveAssignments = true) {
-  state.selectedPlayerIds = rankedActivePlayers()
-    .slice(0, PLAYERS_PER_GAME)
-    .map((player) => player.id);
+// Reconcile the final selection with the active roster. Manual swaps survive
+// refreshes; a new completed game explicitly resets to the new recommendation.
+function refreshSelection(preserveAssignments = true, resetToRecommendation = false) {
+  const rankedIds = rankedActivePlayers().map((player) => player.id);
+  const previousSelection = [...state.selectedPlayerIds];
+  state.recommendedPlayerIds = rankedIds.slice(0, PLAYERS_PER_GAME);
+
+  if (resetToRecommendation || state.selectedPlayerIds.length === 0) {
+    state.selectedPlayerIds = [...state.recommendedPlayerIds];
+    state.selectionConfirmed = false;
+    state.swapOutPlayerId = null;
+  } else {
+    const activeIds = new Set(rankedIds);
+    state.selectedPlayerIds = [...new Set(state.selectedPlayerIds)]
+      .filter((playerId) => activeIds.has(playerId))
+      .slice(0, PLAYERS_PER_GAME);
+    rankedIds.forEach((playerId) => {
+      if (state.selectedPlayerIds.length < PLAYERS_PER_GAME && !state.selectedPlayerIds.includes(playerId)) {
+        state.selectedPlayerIds.push(playerId);
+      }
+    });
+    if (!state.selectedPlayerIds.includes(state.swapOutPlayerId)) state.swapOutPlayerId = null;
+    const selectionChanged = previousSelection.length !== state.selectedPlayerIds.length ||
+      previousSelection.some((playerId, index) => playerId !== state.selectedPlayerIds[index]);
+    if (selectionChanged || state.selectedPlayerIds.length !== PLAYERS_PER_GAME) {
+      state.selectionConfirmed = false;
+    }
+  }
 
   const selectedIds = new Set(state.selectedPlayerIds);
   if (preserveAssignments) {
@@ -222,6 +259,62 @@ function assignmentFor(playerId) {
   return "";
 }
 
+function chooseSwapOut(playerId) {
+  if (state.phase !== "assigning" || state.selectionConfirmed ||
+      !state.selectedPlayerIds.includes(playerId)) return;
+  state.swapOutPlayerId = state.swapOutPlayerId === playerId ? null : playerId;
+  showMessage(state.swapOutPlayerId ? "Now choose a Waiting / Bench player to swap in." : "Swap cancelled.");
+  saveState();
+  render();
+}
+
+function swapInPlayer(playerId) {
+  if (state.phase !== "assigning" || state.selectionConfirmed) return;
+  if (!state.swapOutPlayerId) {
+    showMessage("Tap Swap beside a selected player first.");
+    return;
+  }
+  const incomingPlayer = getPlayer(playerId);
+  const outgoingId = state.swapOutPlayerId;
+  const outgoingPlayer = getPlayer(outgoingId);
+  if (!incomingPlayer?.active || state.selectedPlayerIds.includes(playerId)) return;
+
+  const selectedIndex = state.selectedPlayerIds.indexOf(outgoingId);
+  if (selectedIndex < 0) return;
+  state.selectedPlayerIds[selectedIndex] = playerId;
+  TEAM_LABELS.forEach((team) => {
+    state.assignments[team] = state.assignments[team].filter((id) => id !== outgoingId);
+  });
+  state.swapOutPlayerId = null;
+  state.selectionConfirmed = false;
+  showMessage(`${incomingPlayer.name} swapped in; ${outgoingPlayer?.name || "the selected player"} moved to Waiting / Bench.`);
+  saveState();
+  render();
+}
+
+function confirmFinalSelection() {
+  const activeIds = new Set(state.players.filter((player) => player.active).map((player) => player.id));
+  const validSelection = state.selectedPlayerIds.length === PLAYERS_PER_GAME &&
+    state.selectedPlayerIds.every((playerId) => activeIds.has(playerId));
+  if (!validSelection) {
+    showMessage("Exactly 10 active players are required before team assignment.");
+    return;
+  }
+  state.selectionConfirmed = true;
+  state.swapOutPlayerId = null;
+  showMessage("Final 10 confirmed. Assign exactly 5 players to each team.");
+  saveState();
+  render();
+}
+
+function changeFinalSelection() {
+  if (state.phase !== "assigning") return;
+  state.selectionConfirmed = false;
+  showMessage("You can swap selected and waiting players again.");
+  saveState();
+  render();
+}
+
 function snapshotCurrentState() {
   const { undoStack, ...snapshot } = state;
   return JSON.stringify(snapshot);
@@ -233,7 +326,8 @@ function addUndoSnapshot() {
 }
 
 function assignPlayer(playerId, team) {
-  if (state.phase !== "assigning" || !state.selectedPlayerIds.includes(playerId)) return;
+  if (state.phase !== "assigning" || !state.selectionConfirmed ||
+      !state.selectedPlayerIds.includes(playerId)) return;
   const currentTeam = assignmentFor(playerId);
 
   if (currentTeam === team) {
@@ -255,11 +349,12 @@ function assignPlayer(playerId, team) {
 }
 
 function startGame() {
-  const ready = state.selectedPlayerIds.length === PLAYERS_PER_GAME &&
+  const ready = state.selectionConfirmed &&
+    state.selectedPlayerIds.length === PLAYERS_PER_GAME &&
     state.assignments.A.length === PLAYERS_PER_TEAM &&
     state.assignments.B.length === PLAYERS_PER_TEAM;
   if (!ready) {
-    showMessage("Assign exactly 5 selected players to each team before starting.");
+    showMessage("Confirm the final 10, then assign exactly 5 players to each team before starting.");
     return;
   }
 
@@ -324,7 +419,7 @@ function finishGame() {
 
   state.phase = "assigning";
   state.scores = { A: 0, B: 0 };
-  refreshSelection(false);
+  refreshSelection(false, true);
   showMessage(`Game saved. Team ${winner} won ${scoreA}-${scoreB}.`);
   saveState();
   render();
@@ -416,7 +511,7 @@ function setupHasName(name, ignoredIndex = -1) {
 function renderSetupRoster() {
   const target = targetPlayerCount();
   const selected = setupRosterNames.length;
-  const remaining = target - selected;
+  const remaining = target ? Math.max(target - selected, 0) : 0;
 
   elements.setupTargetCount.textContent = target || "–";
   elements.setupSelectedCount.textContent = selected;
@@ -435,26 +530,16 @@ function renderSetupRoster() {
         </li>`).join("")
     : '<li class="setup-roster-empty">No players selected yet.</li>';
 
-  const remainingForButton = Math.max(0, remaining);
   elements.fillRemainingRoster.textContent =
-    `Fill ${remainingForButton} Remaining Player${remainingForButton === 1 ? "" : "s"}`;
+    `Fill ${remaining} Remaining Player${remaining === 1 ? "" : "s"}`;
   elements.fillRemainingRoster.disabled = !target || remaining <= 0;
-  elements.addSetupPlayer.disabled = !target || remaining <= 0;
-  elements.createRoster.disabled = !target || selected !== target;
+  elements.addSetupPlayer.disabled = false;
+  elements.createRoster.disabled = selected < PLAYERS_PER_GAME;
 }
 
 function addNameToSetup(name) {
   const cleanName = name.trim();
-  const target = targetPlayerCount();
-  if (!target) {
-    elements.setupMessage.textContent = `Choose a whole-number target of at least ${PLAYERS_PER_GAME}.`;
-    return false;
-  }
   if (!cleanName) return false;
-  if (setupRosterNames.length >= target) {
-    elements.setupMessage.textContent = "The target roster is full. Increase Number of Players before adding more.";
-    return false;
-  }
   if (setupHasName(cleanName)) {
     elements.setupMessage.textContent = `${cleanName} is already in the roster.`;
     return false;
@@ -493,9 +578,8 @@ function fillRemainingRoster() {
 }
 
 function createInitialRoster() {
-  const target = targetPlayerCount();
-  if (!target || setupRosterNames.length !== target) {
-    elements.setupMessage.textContent = "Fill every target roster spot before starting the session.";
+  if (setupRosterNames.length < PLAYERS_PER_GAME) {
+    elements.setupMessage.textContent = `Add at least ${PLAYERS_PER_GAME} players before starting the session.`;
     return;
   }
   if (replaceRosterWithNames([...setupRosterNames])) setupRosterNames = [];
@@ -623,32 +707,72 @@ function renderTeamList(element, playerIds) {
 
 function renderAssignmentView() {
   const selectedPlayers = state.selectedPlayerIds.map(getPlayer).filter(Boolean);
+  const selectedIdSet = new Set(state.selectedPlayerIds);
+  const waitingPlayers = rankedActivePlayers().filter((player) => !selectedIdSet.has(player.id));
+  const recommendationSet = new Set(state.recommendedPlayerIds);
+  const matchesRecommendation = state.selectedPlayerIds.length === state.recommendedPlayerIds.length &&
+    state.selectedPlayerIds.every((playerId) => recommendationSet.has(playerId));
+
   elements.nextPlayerList.innerHTML = selectedPlayers.map((player) => {
     const assignedTeam = assignmentFor(player.id);
+    const isSwapPending = state.swapOutPlayerId === player.id;
+    const controls = state.selectionConfirmed
+      ? `<span class="assign-buttons" aria-label="Assign ${escapeHtml(player.name)}">
+          <button class="assign-button ${assignedTeam === "A" ? "selected" : ""}" type="button" data-assign-id="${player.id}" data-team="A" aria-pressed="${assignedTeam === "A"}">A</button>
+          <button class="assign-button ${assignedTeam === "B" ? "selected" : ""}" type="button" data-assign-id="${player.id}" data-team="B" aria-pressed="${assignedTeam === "B"}">B</button>
+        </span>`
+      : `<button class="swap-button ${isSwapPending ? "pending" : ""}" type="button" data-swap-out-id="${player.id}">${isSwapPending ? "Cancel" : "Swap"}</button>`;
     return `
-      <li class="next-player">
+      <li class="next-player ${isSwapPending ? "swap-pending" : ""}">
         <span class="next-player-info">
           <span class="next-player-name">${escapeHtml(player.name)}</span>
           <span class="player-metrics">${formatPoints(player.points)} pts · ${player.gamesPlayed} played · ${player.waitStreak} waited</span>
         </span>
-        <span class="assign-buttons" aria-label="Assign ${escapeHtml(player.name)}">
-          <button class="assign-button ${assignedTeam === "A" ? "selected" : ""}" type="button" data-assign-id="${player.id}" data-team="A" aria-pressed="${assignedTeam === "A"}">A</button>
-          <button class="assign-button ${assignedTeam === "B" ? "selected" : ""}" type="button" data-assign-id="${player.id}" data-team="B" aria-pressed="${assignedTeam === "B"}">B</button>
-        </span>
+        ${controls}
       </li>`;
   }).join("");
 
+  elements.waitingPlayerList.innerHTML = waitingPlayers.length
+    ? waitingPlayers.map((player) => `
+        <li class="waiting-player">
+          <span class="waiting-player-name">
+            ${escapeHtml(player.name)}
+            <span class="player-metrics">${formatPoints(player.points)} pts · ${player.gamesPlayed} played · ${player.waitStreak} waited</span>
+          </span>
+          <button class="swap-in-button" type="button" data-swap-in-id="${player.id}" ${state.swapOutPlayerId ? "" : "disabled"}>Swap In</button>
+        </li>`).join("")
+    : '<li class="roster-empty">No other active players are waiting.</li>';
+
   const activeCount = state.players.filter((player) => player.active).length;
-  elements.selectionHelp.textContent = activeCount >= PLAYERS_PER_GAME
-    ? "Assign every selected player: exactly 5 to Team A and 5 to Team B."
-    : `Only ${activeCount} active player${activeCount === 1 ? " is" : "s are"} available. Add or reactivate players to reach 10.`;
+  if (activeCount < PLAYERS_PER_GAME) {
+    elements.selectionHelp.textContent =
+      `Only ${activeCount} active player${activeCount === 1 ? " is" : "s are"} available. Add or reactivate players to reach 10.`;
+  } else if (state.selectionConfirmed) {
+    elements.selectionHelp.textContent = "Final 10 confirmed. Assign exactly 5 to Team A and 5 to Team B.";
+  } else {
+    elements.selectionHelp.textContent = "This is the ranking recommendation. Swap anyone if needed, then confirm the final 10.";
+  }
+
+  const pendingPlayer = getPlayer(state.swapOutPlayerId);
+  elements.swapInstruction.textContent = pendingPlayer
+    ? `${pendingPlayer.name} will move to the bench. Choose a waiting player to swap in.`
+    : "Tap Swap beside a selected player, then choose someone from the waiting list.";
+  elements.swapInstruction.classList.toggle("active", Boolean(pendingPlayer));
+  elements.selectionLabel.textContent = matchesRecommendation ? "Recommended" : "Adjusted";
+  elements.waitingPlayersSection.hidden = state.selectionConfirmed;
+  elements.swapInstruction.hidden = state.selectionConfirmed;
+  elements.confirmSelection.hidden = state.selectionConfirmed;
+  elements.confirmSelection.disabled = selectedPlayers.length !== PLAYERS_PER_GAME;
+  elements.changeSelection.hidden = !state.selectionConfirmed;
+  elements.teamAssignmentPanel.hidden = !state.selectionConfirmed;
 
   renderTeamList(elements.teamAList, state.assignments.A);
   renderTeamList(elements.teamBList, state.assignments.B);
   elements.teamACount.textContent = `${state.assignments.A.length}/5`;
   elements.teamBCount.textContent = `${state.assignments.B.length}/5`;
   elements.assignmentCount.textContent = `A: ${state.assignments.A.length}/5 · B: ${state.assignments.B.length}/5`;
-  elements.startGame.disabled = selectedPlayers.length !== PLAYERS_PER_GAME ||
+  elements.startGame.disabled = !state.selectionConfirmed ||
+    selectedPlayers.length !== PLAYERS_PER_GAME ||
     state.assignments.A.length !== PLAYERS_PER_TEAM ||
     state.assignments.B.length !== PLAYERS_PER_TEAM;
 }
@@ -768,9 +892,17 @@ function render() {
 }
 
 elements.nextPlayerList.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-assign-id]");
-  if (button) assignPlayer(button.dataset.assignId, button.dataset.team);
+  const assignButton = event.target.closest("[data-assign-id]");
+  if (assignButton) assignPlayer(assignButton.dataset.assignId, assignButton.dataset.team);
+  const swapButton = event.target.closest("[data-swap-out-id]");
+  if (swapButton) chooseSwapOut(swapButton.dataset.swapOutId);
 });
+elements.waitingPlayerList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-swap-in-id]");
+  if (button) swapInPlayer(button.dataset.swapInId);
+});
+elements.confirmSelection.addEventListener("click", confirmFinalSelection);
+elements.changeSelection.addEventListener("click", changeFinalSelection);
 
 elements.startGame.addEventListener("click", startGame);
 elements.scoreboard.addEventListener("click", (event) => {
@@ -791,14 +923,6 @@ elements.createRoster.addEventListener("click", createInitialRoster);
 elements.generateDefaultRoster.addEventListener("click", () => generateDefaultRoster());
 elements.create20Roster.addEventListener("click", () => generateDefaultRoster(20));
 elements.setupPlayerCount.addEventListener("input", renderSetupRoster);
-elements.setupPlayerCount.addEventListener("change", () => {
-  const target = targetPlayerCount();
-  if (target && target < setupRosterNames.length) {
-    elements.setupPlayerCount.value = String(Math.max(PLAYERS_PER_GAME, setupRosterNames.length));
-    elements.setupMessage.textContent = "Remove players before reducing the target below the current roster size.";
-  }
-  renderSetupRoster();
-});
 elements.frequentPlayerChips.addEventListener("click", (event) => {
   const button = event.target.closest("[data-frequent-name]");
   if (button) toggleFrequentPlayer(button.dataset.frequentName);
