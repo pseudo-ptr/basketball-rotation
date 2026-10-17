@@ -956,11 +956,8 @@ function renderRoster() {
   elements.rosterCount.textContent = `${state.players.length} player${state.players.length === 1 ? "" : "s"}`;
   elements.medianHint.textContent = `(active median: ${formatPoints(medianActiveScore())})`;
   elements.rosterLockNote.textContent = state.phase === "playing"
-    ? "Editing and deactivation are locked during a live game. Use + Add Player for late arrivals."
+    ? "Late arrivals can be added now. They will wait on the bench and become eligible after this game."
     : "New players default to the median score of active players; enter a value to override it.";
-
-  const controls = elements.addPlayerForm.querySelectorAll("input, button");
-  controls.forEach((control) => { control.disabled = state.phase === "playing"; });
 
   const sortedPlayers = [...state.players].sort((a, b) => a.rosterOrder - b.rosterOrder);
   const activePlayers = sortedPlayers.filter((player) => player.active);
