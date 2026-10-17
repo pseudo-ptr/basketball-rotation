@@ -18,6 +18,8 @@
 
     <p id="app-message" class="message" role="status" aria-live="polite"></p>
 
+    <button id="open-add-player" class="add-player-button" type="button">+ Add Player</button>
+
     <section id="assignment-view" aria-labelledby="next-heading">
       <div class="next-card">
         <p class="eyebrow">Up next</p>
@@ -149,6 +151,38 @@
       <button id="new-session" class="danger-button" type="button">New Session / Reset</button>
     </section>
   </main>
+
+  <section id="add-player-dialog" class="setup-overlay" role="dialog" aria-modal="true" aria-labelledby="add-player-title" hidden>
+    <div class="setup-card add-player-card">
+      <p class="eyebrow">Today’s roster</p>
+      <h2 id="add-player-title">Add Player</h2>
+      <p id="add-player-timing-note">New players join the waiting bench and become eligible for the next game.</p>
+
+      <section class="add-player-section" aria-labelledby="available-presets-heading">
+        <h3 id="available-presets-heading">Frequent Players</h3>
+        <div id="session-preset-chips" class="frequent-player-chips"></div>
+        <p id="no-session-presets" class="add-player-empty" hidden>Every frequent player is already in today’s roster.</p>
+      </section>
+
+      <section class="add-player-section" aria-labelledby="session-inactive-heading">
+        <h3 id="session-inactive-heading">Inactive Players</h3>
+        <ul id="session-inactive-list" class="add-player-inactive-list"></ul>
+        <p id="no-session-inactive" class="add-player-empty" hidden>No inactive players to reactivate.</p>
+      </section>
+
+      <section class="add-player-section custom-session-player" aria-labelledby="custom-player-heading">
+        <h3 id="custom-player-heading">Custom Player</h3>
+        <label for="session-player-name">Player name / code</label>
+        <input id="session-player-name" type="text" maxlength="40" autocomplete="off" placeholder="Name, nickname, or code">
+        <label for="session-player-points">Starting points <span id="session-median-hint"></span></label>
+        <input id="session-player-points" type="number" min="0" step="0.5" inputmode="decimal" placeholder="Use median">
+        <button id="add-session-player" class="primary-button" type="button">Add to Waiting Bench</button>
+      </section>
+
+      <p id="add-player-dialog-message" class="message" role="status" aria-live="polite"></p>
+      <button id="close-add-player" class="secondary-button" type="button">Close</button>
+    </div>
+  </section>
 
   <section id="roster-setup" class="setup-overlay" role="dialog" aria-modal="true" aria-labelledby="setup-title" hidden>
     <div class="setup-card">

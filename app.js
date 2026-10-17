@@ -8,7 +8,7 @@ const MAX_UNDO_SNAPSHOTS = 10;
 const FREQUENT_PLAYERS = [
   "邓子浩", "老鲁", "Dave", "Neil", "老肖", "Albert", "韩洋",
   "一达", "常哲", "王哥", "王琦", "廖凡", "昊天", "赵",
-  "Ryan", "老方", "Sam", "Leo", "Shaw", "李老师", "George"
+  "Ryan", "老方", "Sam", "Leo", "Shaw", "李老师", "George", "老谭", "Jingsi"
 ];
 
 function freshState(players = []) {
@@ -45,7 +45,11 @@ function loadState() {
         gamesPlayed: Number(player.gamesPlayed) || 0,
         waitStreak: Number(player.waitStreak) || 0,
         active: player.active !== false,
-        rosterOrder: Number.isFinite(player.rosterOrder) ? player.rosterOrder : index
+        rosterOrder: Number.isFinite(player.rosterOrder) ? player.rosterOrder : index,
+        presetName: typeof player.presetName === "string"
+          ? player.presetName
+          : canonicalPresetName(player.name || ""),
+        skipCurrentGame: player.skipCurrentGame === true
       })),
       recommendedPlayerIds: Array.isArray(saved.recommendedPlayerIds) ? saved.recommendedPlayerIds : [],
       selectedPlayerIds: Array.isArray(saved.selectedPlayerIds) ? saved.selectedPlayerIds : [],
@@ -97,6 +101,19 @@ const elements = {
   currentTeamB: document.querySelector("#current-team-b"),
   scoreboard: document.querySelector("#scoreboard"),
   finishGame: document.querySelector("#finish-game"),
+  openAddPlayer: document.querySelector("#open-add-player"),
+  addPlayerDialog: document.querySelector("#add-player-dialog"),
+  addPlayerTimingNote: document.querySelector("#add-player-timing-note"),
+  sessionPresetChips: document.querySelector("#session-preset-chips"),
+  noSessionPresets: document.querySelector("#no-session-presets"),
+  sessionInactiveList: document.querySelector("#session-inactive-list"),
+  noSessionInactive: document.querySelector("#no-session-inactive"),
+  sessionPlayerName: document.querySelector("#session-player-name"),
+  sessionPlayerPoints: document.querySelector("#session-player-points"),
+  sessionMedianHint: document.querySelector("#session-median-hint"),
+  addSessionPlayer: document.querySelector("#add-session-player"),
+  addPlayerDialogMessage: document.querySelector("#add-player-dialog-message"),
+  closeAddPlayer: document.querySelector("#close-add-player"),
   addPlayerForm: document.querySelector("#add-player-form"),
   newPlayerName: document.querySelector("#new-player-name"),
   newPlayerPoints: document.querySelector("#new-player-points"),
@@ -164,6 +181,27 @@ function getPlayer(playerId) {
   return state.players.find((player) => player.id === playerId);
 }
 
+function normalizedName(name) {
+  return String(name).trim().toLocaleLowerCase();
+}
+
+function canonicalPresetName(name) {
+  const normalized = normalizedName(name);
+  return FREQUENT_PLAYERS.find((preset) => normalizedName(preset) === normalized) || null;
+}
+
+function playerForDisplayName(name) {
+  const normalized = normalizedName(name);
+  return state.players.find((player) => normalizedName(player.name) === normalized);
+}
+
+function playerForPreset(presetName) {
+  const normalized = normalizedName(presetName);
+  return state.players.find((player) =>
+    normalizedName(player.presetName || player.name) === normalized
+  );
+}
+
 function comparePriority(playerA, playerB) {
   return (
     playerB.points - playerA.points ||
@@ -197,7 +235,7 @@ function nextPlayerId() {
   return id;
 }
 
-function addPlayerRecord(name, startingPoints) {
+function addPlayerRecord(name, startingPoints, options = {}) {
   const nextOrder = state.players.reduce(
     (highest, player) => Math.max(highest, player.rosterOrder),
     -1
@@ -209,7 +247,9 @@ function addPlayerRecord(name, startingPoints) {
     gamesPlayed: 0,
     waitStreak: 0,
     active: true,
-    rosterOrder: nextOrder
+    rosterOrder: nextOrder,
+    presetName: options.presetName || null,
+    skipCurrentGame: options.skipCurrentGame === true
   };
   state.players.push(player);
   return player;
@@ -360,7 +400,7 @@ function startGame() {
 
   state.phase = "playing";
   state.scores = { A: 0, B: 0 };
-  showMessage("Game started. Roster changes are locked until it is finished.");
+  showMessage("Game started. Late arrivals can be added to the waiting bench.");
   saveState();
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -394,6 +434,13 @@ function finishGame() {
 
   state.players.forEach((player) => {
     if (!player.active) return;
+
+    // A player added or reactivated after this game began enters the ranking
+    // cycle after it ends. They get neither game nor waiting credit here.
+    if (player.skipCurrentGame) {
+      player.skipCurrentGame = false;
+      return;
+    }
 
     if (participantIds.has(player.id)) {
       const team = state.assignments.A.includes(player.id) ? "A" : "B";
@@ -436,12 +483,21 @@ function undoLastGame() {
   const restoredPlayers = new Map(restored.players.map((player) => [player.id, player]));
   const currentRoster = state.players.map((currentPlayer) => {
     const restoredPlayer = restoredPlayers.get(currentPlayer.id);
-    if (!restoredPlayer) return currentPlayer;
+    if (!restoredPlayer) {
+      return {
+        ...currentPlayer,
+        skipCurrentGame: restored.phase === "playing" && currentPlayer.active
+      };
+    }
     return {
       ...restoredPlayer,
       name: currentPlayer.name,
       active: currentPlayer.active,
-      rosterOrder: currentPlayer.rosterOrder
+      rosterOrder: currentPlayer.rosterOrder,
+      presetName: currentPlayer.presetName || restoredPlayer.presetName || null,
+      skipCurrentGame: restored.phase === "playing" && currentPlayer.active && !restoredPlayer.active
+        ? true
+        : restoredPlayer.skipCurrentGame === true
     };
   });
 
@@ -485,7 +541,7 @@ function replaceRosterWithNames(names) {
   }
 
   state = freshState();
-  names.forEach((name) => addPlayerRecord(name, 0));
+  names.forEach((name) => addPlayerRecord(name, 0, { presetName: canonicalPresetName(name) }));
   refreshSelection(false);
   elements.rosterSetup.hidden = true;
   elements.setupMessage.textContent = "";
@@ -601,30 +657,128 @@ function generateDefaultRoster(playerCount = targetPlayerCount()) {
   renderSetupRoster();
 }
 
-function addPlayer(event) {
-  event.preventDefault();
-  if (state.phase === "playing") return;
-  const name = elements.newPlayerName.value.trim();
-  if (!name) return;
+function addPlayerToSession(name, pointsOverride = "", presetName = null) {
+  const cleanName = name.trim();
+  if (!cleanName) return { ok: false, message: "Enter a player name." };
 
-  const median = medianActiveScore();
-  const override = elements.newPlayerPoints.value.trim();
-  const startingPoints = override === "" ? median : Number(override);
-  if (!Number.isFinite(startingPoints) || startingPoints < 0) {
-    showMessage("Starting points must be zero or greater.");
-    return;
+  const existingPresetPlayer = presetName ? playerForPreset(presetName) : null;
+  const existingNamedPlayer = playerForDisplayName(cleanName);
+  const existingPlayer = existingPresetPlayer || existingNamedPlayer;
+  if (existingPlayer) {
+    return {
+      ok: false,
+      message: existingPlayer.active
+        ? `${existingPlayer.name} is already active in today’s roster.`
+        : `${existingPlayer.name} is already in today’s roster. Use Reactivate instead.`
+    };
   }
 
-  const player = addPlayerRecord(name, startingPoints);
-  refreshSelection(true);
-  elements.addPlayerForm.reset();
-  showMessage(
-    override === ""
-      ? `${player.name} added at the active-player median: ${formatPoints(startingPoints)} points.`
-      : `${player.name} added with ${formatPoints(startingPoints)} starting points.`
-  );
+  const median = medianActiveScore();
+  const startingPoints = pointsOverride === "" ? median : Number(pointsOverride);
+  if (!Number.isFinite(startingPoints) || startingPoints < 0) {
+    return { ok: false, message: "Starting points must be zero or greater." };
+  }
+
+  const addedDuringGame = state.phase === "playing";
+  const player = addPlayerRecord(cleanName, startingPoints, {
+    presetName: presetName || canonicalPresetName(cleanName),
+    skipCurrentGame: addedDuringGame
+  });
+
+  // Never disturb the current teams. Outside a live game, reconcile the next
+  // selection immediately so the new active player can be ranked normally.
+  if (!addedDuringGame) refreshSelection(true);
   saveState();
   render();
+
+  const scoreMessage = pointsOverride === ""
+    ? `the active-player median of ${formatPoints(startingPoints)} points`
+    : `${formatPoints(startingPoints)} starting points`;
+  return {
+    ok: true,
+    player,
+    message: addedDuringGame
+      ? `${player.name} added at ${scoreMessage}. They are waiting, receive no points for the current game, and become eligible after it finishes.`
+      : `${player.name} added at ${scoreMessage} and is eligible for the next selection.`
+  };
+}
+
+function reactivatePlayerFromDialog(playerId) {
+  const player = getPlayer(playerId);
+  if (!player || player.active) return;
+
+  player.active = true;
+  player.skipCurrentGame = state.phase === "playing";
+  if (state.phase !== "playing") refreshSelection(true);
+  saveState();
+  render();
+
+  const message = state.phase === "playing"
+    ? `${player.name} reactivated with their existing score and statistics. They receive no points for the current game and become eligible after it finishes.`
+    : `${player.name} reactivated with their existing score and statistics and is eligible for the next selection.`;
+  showMessage(message);
+  elements.addPlayerDialogMessage.textContent = message;
+  renderAddPlayerDialog();
+}
+
+function renderAddPlayerDialog() {
+  const availablePresets = FREQUENT_PLAYERS.filter((name) => !playerForPreset(name));
+  const inactivePlayers = [...state.players]
+    .filter((player) => !player.active)
+    .sort((a, b) => a.rosterOrder - b.rosterOrder);
+
+  elements.addPlayerTimingNote.textContent = state.phase === "playing"
+    ? "The current teams stay unchanged. Anyone added now receives no points for this game and becomes eligible after it finishes."
+    : "New players join the waiting bench and are eligible for the next selection.";
+  elements.sessionMedianHint.textContent = `(active median: ${formatPoints(medianActiveScore())})`;
+  elements.sessionPresetChips.innerHTML = availablePresets.map((name) =>
+    `<button class="frequent-chip" type="button" data-session-preset-name="${escapeHtml(name)}">${escapeHtml(name)}</button>`
+  ).join("");
+  elements.noSessionPresets.hidden = availablePresets.length > 0;
+  elements.sessionInactiveList.innerHTML = inactivePlayers.map((player) => `
+    <li>
+      <span>${escapeHtml(player.name)}<small>${formatPoints(player.points)} pts · ${player.gamesPlayed} played · ${player.waitStreak} waited</small></span>
+      <button class="small-button reactivate" type="button" data-dialog-reactivate-id="${player.id}">Reactivate</button>
+    </li>`).join("");
+  elements.noSessionInactive.hidden = inactivePlayers.length > 0;
+}
+
+function openAddPlayerDialog() {
+  elements.addPlayerDialogMessage.textContent = "";
+  elements.sessionPlayerName.value = "";
+  elements.sessionPlayerPoints.value = "";
+  renderAddPlayerDialog();
+  elements.addPlayerDialog.hidden = false;
+  const firstPreset = elements.sessionPresetChips.querySelector("button");
+  (firstPreset || elements.sessionPlayerName).focus();
+}
+
+function closeAddPlayerDialog() {
+  elements.addPlayerDialog.hidden = true;
+  elements.openAddPlayer.focus();
+}
+
+function addCustomSessionPlayer() {
+  const result = addPlayerToSession(
+    elements.sessionPlayerName.value,
+    elements.sessionPlayerPoints.value.trim()
+  );
+  elements.addPlayerDialogMessage.textContent = result.message;
+  showMessage(result.message);
+  if (result.ok) {
+    elements.sessionPlayerName.value = "";
+    elements.sessionPlayerPoints.value = "";
+    renderAddPlayerDialog();
+  }
+}
+
+function addPlayer(event) {
+  event.preventDefault();
+  const name = elements.newPlayerName.value.trim();
+  if (!name) return;
+  const result = addPlayerToSession(name, elements.newPlayerPoints.value.trim());
+  showMessage(result.message);
+  if (result.ok) elements.addPlayerForm.reset();
 }
 
 function manageRosterPlayer(playerId, action) {
@@ -675,7 +829,8 @@ function resetWithCurrentRoster() {
     ...player,
     points: 0,
     gamesPlayed: 0,
-    waitStreak: 0
+    waitStreak: 0,
+    skipCurrentGame: false
   }));
   const nextPlayerNumber = state.nextPlayerNumber;
   state = freshState(players);
@@ -801,7 +956,7 @@ function renderRoster() {
   elements.rosterCount.textContent = `${state.players.length} player${state.players.length === 1 ? "" : "s"}`;
   elements.medianHint.textContent = `(active median: ${formatPoints(medianActiveScore())})`;
   elements.rosterLockNote.textContent = state.phase === "playing"
-    ? "Roster changes are locked during a live game."
+    ? "Editing and deactivation are locked during a live game. Use + Add Player for late arrivals."
     : "New players default to the median score of active players; enter a value to override it.";
 
   const controls = elements.addPlayerForm.querySelectorAll("input, button");
@@ -912,6 +1067,34 @@ elements.scoreboard.addEventListener("click", (event) => {
 elements.finishGame.addEventListener("click", finishGame);
 elements.undoGame.addEventListener("click", undoLastGame);
 elements.addPlayerForm.addEventListener("submit", addPlayer);
+elements.openAddPlayer.addEventListener("click", openAddPlayerDialog);
+elements.closeAddPlayer.addEventListener("click", closeAddPlayerDialog);
+elements.addSessionPlayer.addEventListener("click", addCustomSessionPlayer);
+elements.sessionPlayerName.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addCustomSessionPlayer();
+  }
+});
+elements.sessionPresetChips.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-session-preset-name]");
+  if (!button) return;
+  const name = button.dataset.sessionPresetName;
+  const result = addPlayerToSession(name, "", name);
+  elements.addPlayerDialogMessage.textContent = result.message;
+  showMessage(result.message);
+  if (result.ok) renderAddPlayerDialog();
+});
+elements.sessionInactiveList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-dialog-reactivate-id]");
+  if (button) reactivatePlayerFromDialog(button.dataset.dialogReactivateId);
+});
+elements.addPlayerDialog.addEventListener("click", (event) => {
+  if (event.target === elements.addPlayerDialog) closeAddPlayerDialog();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements.addPlayerDialog.hidden) closeAddPlayerDialog();
+});
 function handleRosterAction(event) {
   const button = event.target.closest("[data-roster-action]");
   if (button) manageRosterPlayer(button.dataset.playerId, button.dataset.rosterAction);
