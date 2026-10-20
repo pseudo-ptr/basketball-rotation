@@ -5,7 +5,7 @@ const PLAYERS_PER_GAME = 10;
 const PLAYERS_PER_TEAM = 5;
 const TEAM_LABELS = ["A", "B"];
 const MAX_UNDO_SNAPSHOTS = 10;
-const GAME_DURATION_SECONDS = 5;
+const GAME_DURATION_SECONDS = 10 * 60;
 const GAME_DURATION_MS = GAME_DURATION_SECONDS * 1000;
 const FREQUENT_PLAYERS = [
   "Albert Huang", "Bryan Wallace", "Chong Shen", "Chuanwei Wu",
