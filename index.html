@@ -24,7 +24,7 @@
       <div class="next-card">
         <p class="eyebrow">Up next</p>
         <h2 id="next-heading">NEXT 10 PLAYERS <span id="selection-label" class="selection-label">Recommended</span></h2>
-        <p id="selection-help" class="muted-copy">Add at least 10 active players to select a full game.</p>
+        <p id="selection-help" class="muted-copy">Add at least 10 eligible active players to select a full game.</p>
         <ol id="next-player-list" class="next-player-list"></ol>
         <p id="swap-instruction" class="swap-instruction">Tap Swap beside a selected player, then choose someone from the waiting list.</p>
         <section id="waiting-players-section" class="waiting-players" aria-labelledby="waiting-players-heading">
@@ -61,7 +61,12 @@
       <div class="current-game-card">
         <p class="eyebrow">Current game</p>
         <h2 id="current-game-heading">TEAM A <span>vs</span> TEAM B</h2>
-        <p class="target-note">Game target: 7 points</p>
+        <p class="target-note">Fixed 10-minute game</p>
+        <section id="game-clock" class="game-clock" aria-label="Game clock">
+          <p class="timer-label">Time remaining</p>
+          <output id="game-timer" class="game-timer">10:00</output>
+          <p id="timer-status" class="timer-status" aria-live="polite"></p>
+        </section>
         <div class="current-rosters">
           <article>
             <h3>Team A</h3>
@@ -75,30 +80,34 @@
       </div>
 
       <section id="scoreboard" class="scoreboard" aria-label="Score controls"></section>
-      <button id="finish-game" class="finish-button" type="button">Finish Game</button>
+      <section id="final-score-panel" class="final-score-panel" aria-labelledby="final-score-heading" hidden>
+        <p class="eyebrow">Time&rsquo;s up</p>
+        <h2 id="final-score-heading">Confirm Final Score</h2>
+        <p>Correct the score if needed, then save the completed game.</p>
+        <div class="final-score-inputs">
+          <label for="final-score-a">Team A
+            <input id="final-score-a" type="number" min="0" step="1" inputmode="numeric" value="0">
+          </label>
+          <label for="final-score-b">Team B
+            <input id="final-score-b" type="number" min="0" step="1" inputmode="numeric" value="0">
+          </label>
+        </div>
+        <button id="finish-game" class="finish-button" type="button">Finish &amp; Save Game</button>
+      </section>
     </section>
 
     <section class="rules-card" aria-labelledby="rules-heading">
       <h2 id="rules-heading">Player Scoring</h2>
+      <p><strong>Game length:</strong> exactly 10 minutes. The timer, not the score, ends the game; ties are allowed.</p>
       <p><strong>Playing:</strong> every player earns exactly their team’s final basketball score.</p>
       <p><strong>Waiting:</strong> +15, +20, +25, then another +5 for each consecutive wait.</p>
-      <p>Only active players earn points or qualify for the next 10.</p>
+      <p>Non-Members earn normal points through game 2. After reaching the limit, their ranking points freeze, although physical games continue as 3/2, 4/2, and beyond.</p>
+      <p>Limit-Reached Non-Members may play as shortage fallbacks or through an explicit Member Yield. A yielding Member receives the proxy team&rsquo;s score.</p>
     </section>
 
     <details class="panel roster-panel">
       <summary>Manage Roster <span id="roster-count">0 players</span></summary>
       <p id="roster-lock-note" class="panel-intro"></p>
-      <form id="add-player-form" class="add-player-form">
-        <label>
-          Player name / code
-          <input id="new-player-name" name="playerName" type="text" maxlength="40" autocomplete="off" required>
-        </label>
-        <label>
-          Starting points <span id="median-hint"></span>
-          <input id="new-player-points" name="startingPoints" type="number" min="0" step="0.5" inputmode="decimal" placeholder="Use median">
-        </label>
-        <button class="primary-button" type="submit">Add Player</button>
-      </form>
       <div class="roster-groups">
         <section aria-labelledby="active-players-heading">
           <div class="roster-group-heading">
@@ -176,6 +185,11 @@
         <input id="session-player-name" type="text" maxlength="40" autocomplete="off" placeholder="Name, nickname, or code">
         <label for="session-player-points">Starting points <span id="session-median-hint"></span></label>
         <input id="session-player-points" type="number" min="0" step="0.5" inputmode="decimal" placeholder="Use median">
+        <label for="session-player-membership">Membership</label>
+        <select id="session-player-membership">
+          <option value="non-member" selected>Non-Member</option>
+          <option value="member">Member</option>
+        </select>
         <button id="add-session-player" class="primary-button" type="button">Add to Waiting Bench</button>
       </section>
 
@@ -200,7 +214,7 @@
       </div>
 
       <section class="frequent-players" aria-labelledby="frequent-heading">
-        <h3 id="frequent-heading">Frequent Players</h3>
+        <h3 id="frequent-heading">Frequent Players <span class="member-heading-note">All Members</span></h3>
         <div id="frequent-player-chips" class="frequent-player-chips"></div>
       </section>
 
@@ -211,6 +225,10 @@
           <label for="setup-custom-name">Add a custom player</label>
           <div>
             <input id="setup-custom-name" type="text" maxlength="40" autocomplete="off" placeholder="Name, nickname, or code">
+            <select id="setup-player-membership" aria-label="Custom player membership">
+              <option value="non-member" selected>Non-Member</option>
+              <option value="member">Member</option>
+            </select>
             <button id="add-setup-player" class="quick-button" type="button">Add Player</button>
           </div>
         </div>

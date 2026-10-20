@@ -132,11 +132,39 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 .next-player-info { min-width: 0; }
 .next-player-name { display: block; overflow: hidden; font-size: 1rem; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
 .next-player-name::before { content: counter(selected-player) ". "; color: var(--accent); }
+.fallback-badge {
+  display: inline-block;
+  margin-left: .3rem;
+  padding: .12rem .38rem;
+  border: 1px solid rgb(255 208 166 / 55%);
+  border-radius: 999px;
+  color: #ffd0a6;
+  font-size: .58rem;
+  font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.proxy-badge {
+  display: inline-block;
+  margin-left: .3rem;
+  padding: .12rem .38rem;
+  border: 1px solid rgb(63 140 255 / 60%);
+  border-radius: 999px;
+  color: #9bc2ff;
+  font-size: .58rem;
+  font-weight: 900;
+  letter-spacing: .02em;
+  vertical-align: middle;
+}
 .player-metrics { display: block; margin-top: .2rem; color: var(--muted); font-size: .76rem; font-weight: 700; }
+.next-player.played-last-game { background: rgb(255 93 93 / 7%); }
 .next-player.swap-pending { border-color: var(--danger); background: rgb(255 93 93 / 9%); }
 
 .swap-button,
-.swap-in-button {
+.swap-in-button,
+.give-spot-button,
+.receive-spot-button {
   min-height: 3rem;
   padding: .45rem .7rem;
   border: 2px solid var(--line);
@@ -148,7 +176,12 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 }
 .swap-button.pending { border-color: var(--danger); color: var(--danger); }
 .swap-in-button { border-color: var(--green); color: var(--green); }
+.give-spot-button,
+.receive-spot-button { border-color: var(--blue); color: #9bc2ff; }
+.give-spot-button.pending { border-color: var(--danger); color: var(--danger); }
 .swap-in-button:disabled { opacity: .38; }
+.selection-player-actions { display: grid; gap: .3rem; }
+.yielding-note { max-width: 6.5rem; color: #9bc2ff; font-size: .72rem; font-weight: 900; text-align: right; }
 
 .swap-instruction {
   min-height: 1.25rem;
@@ -178,7 +211,9 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
   background: #121d25;
   text-align: left;
 }
+.waiting-player.rested-last-game { background: rgb(46 212 122 / 7%); }
 .waiting-player-name { overflow: hidden; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.fallback-note { display: block; margin-top: .2rem; color: #ffd0a6; font-size: .68rem; font-weight: 800; white-space: normal; }
 .selection-actions { display: grid; gap: .65rem; margin-top: .9rem; }
 
 .assign-buttons { display: grid; grid-template-columns: repeat(2, 3rem); gap: .35rem; }
@@ -231,6 +266,7 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 .current-rosters ul { margin: 0; padding-left: 1.15rem; }
 .team-draft li,
 .current-rosters li { margin: .35rem 0; overflow-wrap: anywhere; font-size: .86rem; font-weight: 750; }
+.proxy-for { display: block; color: #9bc2ff; font-size: .68rem; font-weight: 800; }
 .empty-slot { color: var(--muted); font-style: italic; }
 
 .current-game-card {
@@ -244,6 +280,38 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 
 .current-game-card h2 { margin: .35rem 0; font-size: clamp(1.55rem, 8vw, 2.5rem); }
 .current-game-card h2 span { color: var(--muted); font-size: .55em; }
+.game-clock {
+  margin: .8rem 0 1rem;
+  padding: .8rem;
+  border: 2px solid var(--line);
+  border-radius: 1rem;
+  background: #0f1921;
+}
+.timer-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 900;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.game-timer {
+  display: block;
+  margin-top: .15rem;
+  font-size: clamp(4.5rem, 24vw, 8rem);
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+  line-height: .95;
+}
+.timer-status { min-height: 1.25rem; margin: .3rem 0 0; font-weight: 950; letter-spacing: .08em; }
+.game-clock.warning { border-color: var(--accent); }
+.game-clock.warning .game-timer { color: #ffd0a6; }
+.game-clock.urgent { border-color: var(--danger); background: rgb(255 93 93 / 7%); }
+.game-clock.urgent .game-timer,
+.game-clock.expired .game-timer,
+.game-clock.expired .timer-status { color: var(--danger); }
+.game-clock.expired { border-color: var(--danger); }
 .current-rosters { text-align: left; }
 .current-rosters article:first-child { border-color: var(--accent); }
 .current-rosters article:last-child { border-color: var(--blue); }
@@ -288,6 +356,26 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 .team-score:last-child .score-button:not(.minus) { background: var(--blue); }
 .score-button.minus { grid-column: 1 / -1; background: var(--surface-2); }
 .score-button:active { transform: translateY(1px); box-shadow: none; }
+.score-frozen { margin: .2rem 0; color: var(--muted); font-size: .78rem; font-weight: 800; text-align: center; }
+
+.final-score-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 2px solid var(--danger);
+  border-radius: 1rem;
+  background: rgb(255 93 93 / 7%);
+  text-align: center;
+}
+.final-score-panel h2 { margin: .3rem 0; }
+.final-score-panel > p:not(.eyebrow) { margin: .4rem 0 1rem; color: var(--muted); }
+.final-score-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.final-score-inputs input {
+  min-height: 4.5rem;
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
 
 .finish-button,
 .primary-button,
@@ -317,6 +405,7 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 .rules-card h2 { margin: 0 0 .55rem; font-size: 1rem; }
 .rules-card p { margin: .35rem 0; color: var(--muted); font-size: .86rem; line-height: 1.4; }
 .rules-card strong { color: var(--text); }
+.history-duration { margin: .7rem 0 0; color: var(--muted); font-size: .82rem; font-weight: 800; }
 
 .roster-panel summary {
   min-height: 2.25rem;
@@ -326,9 +415,9 @@ h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 }
 .roster-panel summary span { float: right; color: var(--muted); font-size: .8rem; }
 
-.add-player-form { display: grid; gap: .75rem; margin: .8rem 0 1rem; }
 label { color: var(--muted); font-size: .82rem; font-weight: 800; }
 input,
+select,
 textarea {
   width: 100%;
   margin-top: .35rem;
@@ -338,9 +427,11 @@ textarea {
   color: var(--text);
   font-size: 1rem;
 }
-input { min-height: 3.15rem; padding: .6rem .75rem; }
+input,
+select { min-height: 3.15rem; padding: .6rem .75rem; }
 textarea { min-height: 12rem; padding: .75rem; resize: vertical; }
-input:disabled { opacity: .45; }
+input:disabled,
+select:disabled { opacity: .45; }
 
 .roster-list { display: grid; gap: .55rem; margin: 0; padding: 0; list-style: none; }
 .roster-groups { display: grid; gap: 1rem; }
@@ -360,6 +451,7 @@ input:disabled { opacity: .45; }
   background: #121d25;
 }
 .roster-player.inactive { opacity: .62; }
+.roster-player.limit-reached-player { border-color: rgb(255 93 93 / 48%); }
 .roster-name { overflow: hidden; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
 .roster-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .3rem; }
 .small-button {
@@ -387,7 +479,27 @@ td:first-child { max-width: 9rem; overflow: hidden; font-weight: 900; text-align
 td:nth-child(2) { color: var(--green); font-size: 1.05rem; font-weight: 900; }
 .selected-row { background: rgb(255 122 0 / 9%); }
 .inactive-row { color: var(--muted); opacity: .65; }
+.limit-reached-row { background: rgb(255 93 93 / 5%); }
 .status-active { color: var(--green); }
+.status-limit { color: #ff9a9a; font-weight: 850; }
+
+.membership-badge {
+  display: inline-block;
+  margin: .2rem 0 0 .25rem;
+  padding: .14rem .38rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: .58rem;
+  font-weight: 900;
+  letter-spacing: .035em;
+  line-height: 1.25;
+  vertical-align: middle;
+  white-space: normal;
+}
+.membership-badge.member { color: #7be5aa; }
+.membership-badge.limit-reached { color: #ff9a9a; }
+.member-heading-note { margin-left: .3rem; color: var(--green); font-size: .7rem; text-transform: uppercase; }
 
 .history-list { display: grid; gap: .7rem; }
 .history-game {
@@ -401,6 +513,8 @@ td:nth-child(2) { color: var(--green); font-size: 1.05rem; font-weight: 900; }
 .history-rosters h3 { margin: 0 0 .4rem; font-size: .82rem; }
 .history-rosters ul { margin: 0; padding-left: 1rem; }
 .history-rosters li { margin: .25rem 0; color: var(--muted); font-size: .8rem; }
+.history-proxies { margin: 0 .8rem .8rem; padding: .65rem; border: 1px solid rgb(63 140 255 / 40%); border-radius: .65rem; color: #9bc2ff; font-size: .78rem; }
+.history-proxies ul { margin: .35rem 0 0; padding-left: 1rem; }
 .empty-state { margin: .25rem 0; color: var(--muted); text-align: center; }
 
 .session-actions { display: grid; gap: .75rem; margin-top: 1rem; }
@@ -524,7 +638,8 @@ td:nth-child(2) { color: var(--green); font-size: 1.05rem; font-weight: 900; }
   font-size: .72rem;
 }
 .custom-session-player label { display: block; margin: .55rem 0 .3rem; color: var(--muted); font-size: .82rem; font-weight: 800; }
-.custom-session-player input { width: 100%; min-height: 3.25rem; }
+.custom-session-player input,
+.custom-session-player select { width: 100%; min-height: 3.25rem; }
 .custom-session-player .primary-button { margin-top: .75rem; }
 #add-player-dialog-message { margin-block: .85rem; }
 
@@ -553,6 +668,8 @@ td:nth-child(2) { color: var(--green); font-size: 1.05rem; font-weight: 900; }
   text-align: right;
 }
 .setup-roster-item input { min-height: 2.9rem; margin: 0; }
+.setup-player-identity { min-width: 0; }
+.setup-player-identity .membership-badge { margin-left: 0; }
 .setup-remove {
   min-width: 3rem;
   min-height: 2.9rem;
@@ -566,9 +683,10 @@ td:nth-child(2) { color: var(--green); font-size: 1.05rem; font-weight: 900; }
 .setup-roster-empty { padding: .75rem; color: var(--muted); text-align: center; }
 
 .setup-custom-player { margin-top: .8rem; }
-.setup-custom-player > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
-.setup-custom-player input { margin-top: .35rem; }
-.setup-custom-player .quick-button { width: auto; min-width: 6rem; margin-top: .35rem; }
+.setup-custom-player > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(7.5rem, .65fr); gap: .5rem; }
+.setup-custom-player input,
+.setup-custom-player select { margin-top: .35rem; }
+.setup-custom-player .quick-button { grid-column: 1 / -1; margin-top: 0; }
 .fill-remaining-button { margin-top: 1rem; }
 .setup-shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
 
@@ -598,13 +716,12 @@ td:nth-child(2) { color: var(--green); font-size: 1.05rem; font-weight: 900; }
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 
 @media (min-width: 40rem) {
   .app-shell { padding-inline: 1.5rem; }
   .next-player-list { grid-template-columns: 1fr 1fr; }
-  .add-player-form { grid-template-columns: 2fr 1fr auto; align-items: end; }
-  .add-player-form .primary-button { width: auto; min-width: 8rem; }
   .session-actions { grid-template-columns: 1fr 1fr; }
 }
 
