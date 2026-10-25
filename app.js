@@ -9,10 +9,11 @@ const GAME_DURATION_SECONDS = 10 * 60;
 const GAME_DURATION_MS = GAME_DURATION_SECONDS * 1000;
 const FREQUENT_PLAYERS = [
   "Albert Huang", "Bryan Wallace", "Chong Shen", "Chuanwei Wu",
-  "Eddie Chang", "Guorong Wang", "Haiqin Li", "Haotian Zhang",
-  "Jianliang Xiao", "Joey Zhao", "Liaofan Lin", "Max Siewert",
-  "Min Fang", "Qi Wang", "Sean Wang", "Weijun Tan", "Xifeng Lu",
-  "Yang Han", "Yanjun Gan", "Yida Zhang", "Zhijian Fei", "Zihao Deng"
+  "Eddie Chang", "Eric Zhang", "George Lin", "Guorong Wang",
+  "Haiqin Li", "Haotian Zhang", "Jianliang Xiao", "Joey Zhao",
+  "Leo Chang", "Liaofan Lin", "Max Siewert", "Min Fang", "Qi Wang",
+  "Sam Chang", "Sean Wang", "Weijun Tan", "Xifeng Lu", "Yang Han",
+  "Yanjun Gan", "Yida Zhang", "Zhijian Fei", "Zihao Deng"
 ];
 
 function freshState(players = []) {
