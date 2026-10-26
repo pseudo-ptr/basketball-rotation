@@ -63,6 +63,18 @@ button { touch-action: manipulation; }
 
 h1 { margin: .25rem 0 0; font-size: clamp(1.8rem, 8vw, 2.8rem); }
 .target-note { margin: .4rem 0 1.1rem; color: var(--muted); font-weight: 700; }
+.sound-toggle {
+  min-height: 2.25rem;
+  margin: -.45rem 0 .65rem;
+  padding: .35rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: .75rem;
+  font-weight: 850;
+}
+.sound-toggle[aria-pressed="false"] { color: var(--muted); }
 .muted-copy, .panel-intro { color: var(--muted); line-height: 1.45; }
 .panel-intro { margin: -.2rem 0 .8rem; font-size: .88rem; }
 

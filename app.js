@@ -1,18 +1,20 @@
 "use strict";
 
 const STORAGE_KEY = "basketballPlayerRotationSessionV2";
+const SOUND_SETTING_KEY = "basketballTimerSoundEnabledV1";
+const AUDIO_CUE_STATE_KEY = "basketballTimerAudioCuesV1";
 const PLAYERS_PER_GAME = 10;
 const PLAYERS_PER_TEAM = 5;
 const TEAM_LABELS = ["A", "B"];
 const MAX_UNDO_SNAPSHOTS = 10;
-const GAME_DURATION_SECONDS = 10 * 60;
+const GAME_DURATION_SECONDS = 60 * 10;
 const GAME_DURATION_MS = GAME_DURATION_SECONDS * 1000;
 const FREQUENT_PLAYERS = [
   "Eddie Chang", "Leo Chang", "Sam Chang", "Zihao Deng", "Min Fang",
-  "Zhijian Fei", "Yanjun Gan", "Yang Han", "Albert Huang", "Haiqin Li",
+  "Zhijian Fei", "Yanjun Gan", "Yang Han", "Jingsi He", "Albert Huang", "Haiqin Li",
   "George Lin", "Liaofan Lin", "Xifeng Lu", "Chong Shen", "Max Siewert",
   "Weijun Tan", "Bryan Wallace", "Guorong Wang", "Qi Wang", "Sean Wang",
-  "Chuanwei Wu", "Jianliang Xiao", "Eric Zhang", "Haotian Zhang",
+  "Chuanwei Wu", "Jianliang Xiao", "Ethan Yee", "Eric Zhang", "Haotian Zhang",
   "Yida Zhang", "Joey Zhao"
 ];
 
@@ -125,9 +127,28 @@ const restoredState = loadState();
 let state = restoredState || freshState();
 let setupRosterEntries = [];
 let timerIntervalId = null;
+let audioContext = null;
+let audioCueState = null;
+let lastAudioRemainingMs = null;
+let lastAudioTickAt = null;
+let soundEnabled = loadSoundSetting();
+
+const SPOKEN_COUNTDOWN = {
+  10: "Ten", 9: "Nine", 8: "Eight", 7: "Seven", 6: "Six",
+  5: "Five", 4: "Four", 3: "Three", 2: "Two", 1: "One"
+};
+const TIMER_AUDIO_CUES = [
+  { key: "halfTime", thresholdMs: 300000, kind: "announcement", text: "Half time" },
+  { key: "twoMinutes", thresholdMs: 120000, kind: "announcement", text: "Two minutes" },
+  { key: "oneMinute", thresholdMs: 60000, kind: "announcement", text: "One minute" },
+  ...Object.keys(SPOKEN_COUNTDOWN).map(Number).sort((a, b) => b - a)
+    .map((second) => ({ key: String(second), thresholdMs: second * 1000, kind: "speech", second })),
+  { key: "buzzer", thresholdMs: 0, kind: "buzzer" }
+];
 
 const elements = {
   sessionSummary: document.querySelector("#session-summary"),
+  soundToggle: document.querySelector("#sound-toggle"),
   pageTitle: document.querySelector("#page-title"),
   message: document.querySelector("#app-message"),
   assignmentView: document.querySelector("#assignment-view"),
@@ -666,6 +687,268 @@ function hasCurrentGame(stateToCheck = state) {
   return stateToCheck.phase === "playing" || stateToCheck.phase === "awaitingScore";
 }
 
+function loadSoundSetting() {
+  try {
+    return localStorage.getItem(SOUND_SETTING_KEY) !== "false";
+  } catch (error) {
+    return true;
+  }
+}
+
+function saveSoundSetting() {
+  try {
+    localStorage.setItem(SOUND_SETTING_KEY, String(soundEnabled));
+  } catch (error) {
+    // Audio preferences must never interfere with the game.
+  }
+}
+
+function renderSoundSetting() {
+  elements.soundToggle.textContent = soundEnabled ? "Sound ON" : "Sound OFF";
+  elements.soundToggle.setAttribute("aria-pressed", String(soundEnabled));
+  elements.soundToggle.setAttribute("aria-label", `Timer sound ${soundEnabled ? "on" : "off"}. Tap to turn ${soundEnabled ? "off" : "on"}.`);
+}
+
+function audioGameKey() {
+  return Number.isFinite(state.gameStartedAt) && Number.isFinite(state.gameEndsAt)
+    ? `${state.gameStartedAt}:${state.gameEndsAt}`
+    : null;
+}
+
+function saveAudioCueState() {
+  if (!audioCueState) return;
+  try {
+    localStorage.setItem(AUDIO_CUE_STATE_KEY, JSON.stringify(audioCueState));
+  } catch (error) {
+    // Cue persistence is best-effort; timer operation remains independent.
+  }
+}
+
+function initializeAudioCueState(forceNew = false) {
+  const gameKey = audioGameKey();
+  if (!gameKey) {
+    audioCueState = null;
+    lastAudioRemainingMs = null;
+    lastAudioTickAt = null;
+    return;
+  }
+
+  let saved = null;
+  if (!forceNew) {
+    try {
+      saved = JSON.parse(localStorage.getItem(AUDIO_CUE_STATE_KEY));
+    } catch (error) {
+      saved = null;
+    }
+  }
+  audioCueState = saved?.gameKey === gameKey && saved.played && typeof saved.played === "object"
+    ? { gameKey, played: { ...saved.played } }
+    : { gameKey, played: {} };
+
+  const remainingMs = Math.max(0, state.gameEndsAt - Date.now());
+  // On a new short game, or after a refresh, thresholds already behind the
+  // absolute clock are retired rather than replayed.
+  TIMER_AUDIO_CUES.forEach((cue) => {
+    if (cue.thresholdMs > 0 && remainingMs <= cue.thresholdMs) audioCueState.played[cue.key] = true;
+  });
+  lastAudioRemainingMs = remainingMs;
+  lastAudioTickAt = Date.now();
+  saveAudioCueState();
+}
+
+function getAudioContext() {
+  if (audioContext) return audioContext;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  try {
+    audioContext = new AudioContextClass();
+  } catch (error) {
+    audioContext = null;
+  }
+  return audioContext;
+}
+
+async function unlockTimerAudio() {
+  if (!soundEnabled) return;
+  try {
+    const context = getAudioContext();
+    if (context?.state === "suspended") await context.resume();
+    if (context) {
+      const source = context.createBufferSource();
+      source.buffer = context.createBuffer(1, 1, context.sampleRate);
+      source.connect(context.destination);
+      source.start(0);
+    }
+  } catch (error) {
+    // Safari may decline audio activation; the timer must continue regardless.
+  }
+
+  try {
+    if ("speechSynthesis" in window && "SpeechSynthesisUtterance" in window) {
+      const unlock = new SpeechSynthesisUtterance(".");
+      unlock.volume = 0;
+      window.speechSynthesis.speak(unlock);
+    }
+  } catch (error) {
+    // Speech support is optional and isolated from game behavior.
+  }
+}
+
+async function playWarningHorn() {
+  try {
+    const context = getAudioContext();
+    if (!context) return;
+    if (context.state === "suspended") await context.resume();
+    const startAt = context.currentTime + 0.01;
+    const stopAt = startAt + 0.62;
+    const masterGain = context.createGain();
+    const compressor = context.createDynamicsCompressor();
+    masterGain.gain.setValueAtTime(0.0001, startAt);
+    masterGain.gain.exponentialRampToValueAtTime(0.55, startAt + 0.018);
+    masterGain.gain.setValueAtTime(0.55, stopAt - 0.09);
+    masterGain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+    compressor.threshold.value = -6;
+    compressor.knee.value = 8;
+    compressor.ratio.value = 8;
+    compressor.attack.value = 0.002;
+    compressor.release.value = 0.12;
+    masterGain.connect(compressor).connect(context.destination);
+
+    const vibrato = context.createOscillator();
+    const vibratoDepth = context.createGain();
+    vibrato.frequency.value = 18;
+    vibratoDepth.gain.value = 9;
+    vibrato.connect(vibratoDepth);
+    vibrato.start(startAt);
+    vibrato.stop(stopAt);
+
+    [310, 390].forEach((frequency) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sawtooth";
+      oscillator.frequency.value = frequency;
+      gain.gain.value = 0.5;
+      vibratoDepth.connect(oscillator.detune);
+      oscillator.connect(gain).connect(masterGain);
+      oscillator.start(startAt);
+      oscillator.stop(stopAt);
+    });
+  } catch (error) {
+    // Audio feedback is non-critical.
+  }
+}
+
+function speakCountdownNumber(second) {
+  try {
+    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(SPOKEN_COUNTDOWN[second]);
+    utterance.lang = "en-US";
+    utterance.rate = 1.35;
+    utterance.pitch = 1;
+    const englishVoice = window.speechSynthesis.getVoices()
+      .find((voice) => voice.lang.toLowerCase().startsWith("en"));
+    if (englishVoice) utterance.voice = englishVoice;
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    // Speech failures must not affect timing.
+  }
+}
+
+function speakTimerAnnouncement(text) {
+  try {
+    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    utterance.volume = 1;
+    utterance.rate = 1.05;
+    utterance.pitch = 1;
+    const englishVoice = window.speechSynthesis.getVoices()
+      .find((voice) => voice.lang.toLowerCase().startsWith("en"));
+    if (englishVoice) utterance.voice = englishVoice;
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    // Speech failures must not affect timing.
+  }
+}
+
+async function playAttentionAnnouncement(text) {
+  await playWarningHorn();
+  await new Promise((resolve) => window.setTimeout(resolve, 700));
+  if (soundEnabled) speakTimerAnnouncement(text);
+}
+
+async function playFinalBuzzer() {
+  try {
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    const context = getAudioContext();
+    if (!context) return;
+    if (context.state === "suspended") await context.resume();
+    const startAt = context.currentTime + 0.01;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.42, startAt + 0.025);
+    gain.gain.setValueAtTime(0.42, startAt + 1.25);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.55);
+    gain.connect(context.destination);
+    [92, 116].forEach((frequency) => {
+      const oscillator = context.createOscillator();
+      oscillator.type = "sawtooth";
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      oscillator.connect(gain);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + 1.56);
+    });
+  } catch (error) {
+    // Audio feedback is non-critical.
+  }
+}
+
+function playTimerAudioCue(cue) {
+  if (!soundEnabled) return;
+  if (cue.kind === "announcement") void playAttentionAnnouncement(cue.text);
+  else if (cue.kind === "speech") speakCountdownNumber(cue.second);
+  else if (cue.kind === "buzzer") void playFinalBuzzer();
+}
+
+function processTimerAudio() {
+  if (state.phase !== "playing" || !Number.isFinite(state.gameEndsAt)) return;
+  if (!audioCueState || audioCueState.gameKey !== audioGameKey()) initializeAudioCueState();
+
+  const now = Date.now();
+  const remainingMs = Math.max(0, state.gameEndsAt - now);
+  if (lastAudioRemainingMs === null) {
+    lastAudioRemainingMs = remainingMs;
+    lastAudioTickAt = now;
+    return;
+  }
+
+  const largeJump = document.hidden || (lastAudioTickAt !== null && now - lastAudioTickAt > 1750);
+  const crossed = TIMER_AUDIO_CUES.filter((cue) =>
+    !audioCueState.played[cue.key] &&
+    lastAudioRemainingMs > cue.thresholdMs &&
+    remainingMs <= cue.thresholdMs
+  );
+
+  if (largeJump) {
+    // Retire every skipped threshold. The buzzer alone may sound once when an
+    // expired game is resumed, as long as it was not already persisted.
+    crossed.forEach((cue) => { audioCueState.played[cue.key] = true; });
+    const buzzer = crossed.find((cue) => cue.kind === "buzzer");
+    if (buzzer) playTimerAudioCue(buzzer);
+  } else if (crossed.length > 0) {
+    // If a brief stall crosses two boundaries, mark both but play only the cue
+    // nearest the current clock so speech can never build a delayed queue.
+    crossed.forEach((cue) => { audioCueState.played[cue.key] = true; });
+    playTimerAudioCue(crossed[crossed.length - 1]);
+  }
+
+  if (crossed.length > 0) saveAudioCueState();
+  lastAudioRemainingMs = remainingMs;
+  lastAudioTickAt = now;
+}
+
 function stopGameTimerLoop() {
   if (timerIntervalId !== null) {
     window.clearInterval(timerIntervalId);
@@ -699,6 +982,7 @@ function syncGameTimer() {
     return;
   }
 
+  processTimerAudio();
   if (!Number.isFinite(state.gameEndsAt) || Date.now() >= state.gameEndsAt) {
     state.phase = "awaitingScore";
     stopGameTimerLoop();
@@ -726,10 +1010,12 @@ function startGame() {
     return;
   }
 
+  void unlockTimerAudio();
   state.phase = "playing";
   state.scores = { A: 0, B: 0 };
   state.gameStartedAt = Date.now();
   state.gameEndsAt = state.gameStartedAt + GAME_DURATION_MS;
+  initializeAudioCueState(true);
   showMessage("10:00 game started. Late arrivals can be added to the waiting bench.");
   saveState();
   render();
@@ -1512,6 +1798,7 @@ function render() {
   renderRoster();
   renderStandings();
   renderHistory();
+  renderSoundSetting();
   if (state.phase === "playing") startGameTimerLoop();
   else stopGameTimerLoop();
 }
@@ -1536,6 +1823,16 @@ elements.confirmSelection.addEventListener("click", confirmFinalSelection);
 elements.changeSelection.addEventListener("click", changeFinalSelection);
 
 elements.startGame.addEventListener("click", startGame);
+elements.soundToggle.addEventListener("click", () => {
+  soundEnabled = !soundEnabled;
+  saveSoundSetting();
+  renderSoundSetting();
+  if (soundEnabled) void unlockTimerAudio();
+  else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+});
+// Any post-refresh interaction is another opportunity to satisfy Safari's
+// user-gesture requirement without adding a separate enable-audio workflow.
+document.addEventListener("pointerdown", () => { void unlockTimerAudio(); }, { passive: true });
 elements.scoreboard.addEventListener("click", (event) => {
   const button = event.target.closest("[data-score-team]");
   if (button) adjustScore(button.dataset.scoreTeam, Number(button.dataset.amount));
