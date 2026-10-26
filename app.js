@@ -687,6 +687,11 @@ function hasCurrentGame(stateToCheck = state) {
   return stateToCheck.phase === "playing" || stateToCheck.phase === "awaitingScore";
 }
 
+function isCurrentGameParticipant(playerId) {
+  return hasCurrentGame() &&
+    (state.assignments.A.includes(playerId) || state.assignments.B.includes(playerId));
+}
+
 function loadSoundSetting() {
   try {
     return localStorage.getItem(SOUND_SETTING_KEY) !== "false";
@@ -1472,12 +1477,17 @@ function addCustomSessionPlayer() {
 }
 
 function manageRosterPlayer(playerId, action) {
-  if (hasCurrentGame()) {
+  const player = getPlayer(playerId);
+  if (!player) return;
+
+  if (hasCurrentGame() && action !== "deactivate" && action !== "reactivate") {
     showMessage("Finish or undo the current game before changing the roster.");
     return;
   }
-  const player = getPlayer(playerId);
-  if (!player) return;
+  if (action === "deactivate" && isCurrentGameParticipant(playerId)) {
+    showMessage("Cannot deactivate while this player is in the current game.");
+    return;
+  }
   const wasSelected = state.selectedPlayerIds.includes(playerId) ||
     state.assignments.A.includes(playerId) || state.assignments.B.includes(playerId);
 
@@ -1499,9 +1509,12 @@ function manageRosterPlayer(playerId, action) {
 
   if (action === "reactivate" && !player.active) {
     player.active = true;
-    showMessage(player.limitReached
-      ? `${player.name} reactivated as present and remains Limit Reached. They can be used as a shortage fallback or through Member Yield.`
-      : `${player.name} reactivated with their existing score and statistics.`);
+    player.skipCurrentGame = hasCurrentGame();
+    showMessage(hasCurrentGame()
+      ? `${player.name} reactivated with their existing score and statistics. They receive no points for the current game and become eligible after it finishes.`
+      : player.limitReached
+        ? `${player.name} reactivated as present and remains Limit Reached. They can be used as a shortage fallback or through Member Yield.`
+        : `${player.name} reactivated with their existing score and statistics.`);
   }
 
   if (action === "delete" && !player.active) {
@@ -1511,7 +1524,9 @@ function manageRosterPlayer(playerId, action) {
     showMessage(`${player.name} permanently deleted. Completed game history was preserved.`);
   }
 
-  refreshSelection(true);
+  // The active game's selection and assignments are immutable. Finishing the
+  // game will build the next selection from the then-active roster.
+  if (!hasCurrentGame()) refreshSelection(true);
   saveState();
   render();
 }
@@ -1704,16 +1719,22 @@ function renderRoster() {
   const eligibleCount = state.players.filter(isRotationEligible).length;
   elements.rosterCount.textContent = `${state.players.length} player${state.players.length === 1 ? "" : "s"}`;
   elements.rosterLockNote.textContent = hasCurrentGame()
-    ? "The current lineup stays unchanged. Use the main + Add Player button for late arrivals."
+    ? "Inactive players can be reactivated for the next game. Players outside the current game can be deactivated; current Team A and Team B players stay active until this game is finished."
     : "View player status, edit names, deactivate players, or reactivate inactive players below.";
 
   const sortedPlayers = [...state.players].sort((a, b) => a.rosterOrder - b.rosterOrder);
   const activePlayers = sortedPlayers.filter((player) => player.active);
   const inactivePlayers = sortedPlayers.filter((player) => !player.active);
-  const disabled = hasCurrentGame() ? "disabled" : "";
+  const otherActionsDisabled = hasCurrentGame() ? "disabled" : "";
 
   elements.activePlayerList.innerHTML = activePlayers.length
-    ? activePlayers.map((player) => `
+    ? activePlayers.map((player) => {
+        const currentGameParticipant = isCurrentGameParticipant(player.id);
+        const deactivateDisabled = currentGameParticipant ? "disabled" : "";
+        const deactivateReason = currentGameParticipant
+          ? '<span class="player-action-note">Cannot deactivate while this player is in the current game.</span>'
+          : "";
+        return `
         <li class="roster-player ${player.limitReached ? "limit-reached-player" : ""}">
           <span class="roster-name">
             ${escapeHtml(player.name)}
@@ -1721,10 +1742,12 @@ function renderRoster() {
             <span class="player-metrics">${formatPoints(player.points)} pts · ${player.gamesPlayed} played · ${player.waitStreak} waited</span>
           </span>
           <span class="roster-actions">
-            <button class="small-button" type="button" data-roster-action="edit" data-player-id="${player.id}" ${disabled}>Edit</button>
-            <button class="small-button deactivate" type="button" data-roster-action="deactivate" data-player-id="${player.id}" ${disabled}>Deactivate</button>
+            <button class="small-button" type="button" data-roster-action="edit" data-player-id="${player.id}" ${otherActionsDisabled}>Edit</button>
+            <button class="small-button deactivate" type="button" data-roster-action="deactivate" data-player-id="${player.id}" ${deactivateDisabled}>Deactivate</button>
+            ${deactivateReason}
           </span>
-        </li>`).join("")
+        </li>`;
+      }).join("")
     : '<li class="roster-empty">No active players.</li>';
 
   elements.inactivePlayerList.innerHTML = inactivePlayers.length
@@ -1736,9 +1759,9 @@ function renderRoster() {
             <span class="player-metrics">${formatPoints(player.points)} pts · ${player.gamesPlayed} played · ${player.waitStreak} waited</span>
           </span>
           <span class="roster-actions">
-            <button class="small-button" type="button" data-roster-action="edit" data-player-id="${player.id}" ${disabled}>Edit</button>
-            <button class="small-button reactivate" type="button" data-roster-action="reactivate" data-player-id="${player.id}" ${disabled}>Reactivate</button>
-            <button class="small-button delete-permanently" type="button" data-roster-action="delete" data-player-id="${player.id}" ${disabled}>Delete Permanently</button>
+            <button class="small-button" type="button" data-roster-action="edit" data-player-id="${player.id}" ${otherActionsDisabled}>Edit</button>
+            <button class="small-button reactivate" type="button" data-roster-action="reactivate" data-player-id="${player.id}">Reactivate</button>
+            <button class="small-button delete-permanently" type="button" data-roster-action="delete" data-player-id="${player.id}" ${otherActionsDisabled}>Delete Permanently</button>
           </span>
         </li>`).join("")
     : '<li class="roster-empty">No inactive players.</li>';
